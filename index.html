@@ -294,6 +294,15 @@ header{display:flex;align-items:center;justify-content:space-between;padding:9px
           <button class="team-filter-btn sm" id="tf-Director" onclick="setTeamFilter('Director')">Director</button>
           <button class="team-filter-btn sm" id="tf-admit" onclick="setTeamFilter('admit')">Admit RN</button>
           <button class="team-filter-btn sm" id="tf-OnCall" onclick="setTeamFilter('OnCall')">🌙 On-Call</button>
+          <div style="width:100%;height:1px;background:var(--border);margin:1px 0"></div>
+          <button class="team-filter-btn sm" id="tf-ancillary" onclick="setTeamFilter('ancillary')">All Ancillary</button>
+          <button class="team-filter-btn sm" id="tf-HCA" onclick="setTeamFilter('HCA')">HCA</button>
+          <button class="team-filter-btn sm" id="tf-CLERGY" onclick="setTeamFilter('CLERGY')">Clergy</button>
+          <button class="team-filter-btn sm" id="tf-MCW" onclick="setTeamFilter('MCW')">MCW</button>
+          <button class="team-filter-btn sm" id="tf-LIAISON" onclick="setTeamFilter('LIAISON')">Liaison</button>
+          <button class="team-filter-btn sm" id="tf-PROVIDER" onclick="setTeamFilter('PROVIDER')">Provider</button>
+          <button class="team-filter-btn sm" id="tf-OFFICE" onclick="setTeamFilter('OFFICE')">Office</button>
+          <button class="team-filter-btn sm" id="tf-OTHER" onclick="setTeamFilter('OTHER')">Other</button>
         </div>
       </div>
 
@@ -398,7 +407,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:9px
       <div style="flex:1">
         <div class="field-label" style="margin-top:0;margin-bottom:3px">Status:</div>
         <select id="ntStatusInput" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:5px 8px;outline:none">
-          <option value="active">✅ Active</option>
+          <option value="active">✅ Full Time</option>
           <option value="parttime">🕐 Part Time</option>
           <option value="prn">📋 PRN</option>
           <option value="loa">⏸️ Leave of Absence</option>
@@ -408,7 +417,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:9px
     </div>
     <div style="display:flex;gap:7px;margin-bottom:8px">
       <div style="flex:1">
-        <div class="field-label" style="margin-top:0;margin-bottom:3px">Credentials / Title:</div>
+        <div class="field-label" style="margin-top:0;margin-bottom:3px">Titles / Credentials:</div>
         <input type="text" id="ntCredsInput" placeholder="BSN, RN, CHPN…"
           style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:5px 8px;outline:none"/>
       </div>
@@ -482,6 +491,86 @@ header{display:flex;align-items:center;justify-content:space-between;padding:9px
   </div>
 </div>
 
+<!-- STAFF EDIT MODAL (used for all staff types — ancillary) -->
+<div class="modal-overlay" id="staffEditModal">
+  <div class="modal">
+    <h3>✎ Edit Staff</h3>
+    <div class="add-form">
+      <div class="field-label" style="margin-top:0">Name:</div>
+      <input type="text" id="seNa" placeholder="Full name"/>
+      <div style="display:flex;gap:7px">
+        <div style="flex:1">
+          <div class="field-label">Role:</div>
+          <select id="seRole">
+            <optgroup label="Clinical">
+              <option value="CM_RN">Case Manager (RN)</option>
+              <option value="CM_LPN">Case Manager (LPN)</option>
+              <option value="CM_SUP">⭐ Supervisor</option>
+              <option value="CM_DIR">👑 Director</option>
+            </optgroup>
+            <optgroup label="Admit / On-Call">
+              <option value="ADMIT_FT">Admit RN (FT)</option>
+              <option value="ADMIT_PRN">Admit RN (PRN)</option>
+              <option value="ONCALL">🌙 On-Call RN</option>
+            </optgroup>
+            <optgroup label="Ancillary">
+              <option value="HCA">HCA</option>
+              <option value="CLERGY">Clergy</option>
+              <option value="MCW">Medical Social Worker</option>
+              <option value="LIAISON">Liaison</option>
+              <option value="PROVIDER">Provider</option>
+              <option value="OFFICE">Office Staff</option>
+              <option value="OTHER">Other</option>
+            </optgroup>
+          </select>
+        </div>
+        <div style="flex:1">
+          <div class="field-label">Status:</div>
+          <select id="seStatus">
+            <option value="active">✅ Full Time</option>
+            <option value="parttime">🕐 Part Time</option>
+            <option value="prn">📋 PRN</option>
+            <option value="loa">⏸️ Leave of Absence</option>
+            <option value="inactive">🌿 Alumni</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;gap:7px">
+        <div style="flex:1">
+          <div class="field-label">IDT Team:</div>
+          <select id="seIDT">
+            <option value="">— None —</option>
+            <option value="Purple">Purple</option>
+            <option value="Blue">Blue</option>
+          </select>
+        </div>
+        <div style="flex:1">
+          <div class="field-label">Zone:</div>
+          <select id="seZone">
+            <option value="atlanta">Atlanta</option>
+            <option value="eastga" selected>East Georgia</option>
+            <option value="augusta">Augusta</option>
+          </select>
+        </div>
+      </div>
+      <div class="field-label">Titles / Credentials:</div>
+      <input type="text" id="seCreds" placeholder="e.g. MSW, Chaplain, MD, Office Manager"/>
+      <div class="field-label">Phone:</div>
+      <input type="tel" id="sePhone" placeholder="(555) 555-5555"/>
+      <div class="field-label">Address (for map pin):</div>
+      <div style="position:relative">
+        <input type="text" id="seAddr" placeholder="Address, city, or zip…" autocomplete="off" oninput="searchSeAddr()"/>
+        <div id="seAddrSuggestions" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:0 0 7px 7px;z-index:300;max-height:150px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.15)"></div>
+      </div>
+      <div id="seAddrStatus" style="font-size:10px;color:var(--muted);margin-top:2px;min-height:14px"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal('staffEditModal')">Cancel</button>
+      <button class="btn" onclick="saveStaffEdit()">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- EDIT ADMIT MODAL -->
 <div class="modal-overlay" id="editAdmitModal">
   <div class="modal">
@@ -497,7 +586,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:9px
       </select>
       <div class="field-label">Status:</div>
       <select id="eaStatus">
-        <option value="active">✅ Active</option>
+        <option value="active">✅ Full Time</option>
         <option value="parttime">🕐 Part Time</option>
         <option value="prn">📋 PRN</option>
         <option value="loa">⏸️ Leave of Absence</option>
@@ -511,7 +600,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:9px
       </select>
       <div style="display:flex;gap:7px">
         <div style="flex:1">
-          <div class="field-label" style="margin-top:0">Credentials / Title:</div>
+          <div class="field-label" style="margin-top:0">Titles / Credentials:</div>
           <input type="text" id="eaCredentials" placeholder="BSN, RN, CHPN…"/>
         </div>
         <div style="flex:1">
@@ -699,7 +788,7 @@ const NURSE_BASE_COLOR     = '#9B89C4'; // fallback lavender
 const NURSE_SELECTED_COLOR = '#6B3FA0'; // bright purple when selected
 
 const EMPLOYMENT_STATUS = {
-  active:   {label:'Active',          icon:'✅'},
+  active:   {label:'Full Time',        icon:'✅'},
   parttime: {label:'Part Time',       icon:'🕐'},
   prn:      {label:'PRN',             icon:'📋'},
   loa:      {label:'Leave of Absence',icon:'🌙'},
@@ -719,13 +808,23 @@ const ADMIT_LABELS = {
 
 // ─── UNIFIED ROLE CONFIG ─────────────────────────────────────
 const ROLES_CONFIG = {
-  'CM_RN':    { label:'Case Manager (RN)',  color:'#9B89C4', category:'cm',     badge:'RN',        badgeBg:'#9B89C4' },
-  'CM_LPN':   { label:'Case Manager (LPN)', color:'#B8A0C8', category:'cm',     badge:'LPN',       badgeBg:'#B8A0C8' },
-  'CM_SUP':   { label:'Supervisor',         color:'#5C3D8F', category:'cm',     badge:'⭐ SUP',    badgeBg:'#5C3D8F' },
-  'CM_DIR':   { label:'Director',           color:'#3B2060', category:'cm',     badge:'👑 DIR',    badgeBg:'#3B2060' },
-  'ADMIT_FT': { label:'Admit RN (FT)',      color:'#60a5fa', category:'admit',  badge:'Admit FT',  badgeBg:'#60a5fa' },
-  'ADMIT_PRN':{ label:'Admit RN (PRN)',     color:'#3b82f6', category:'admit',  badge:'Admit PRN', badgeBg:'#3b82f6' },
-  'ONCALL':   { label:'On-Call RN',         color:'#1e3a8a', category:'oncall', badge:'🌙 On-Call',badgeBg:'#1e3a8a' },
+  // Case Managers — purple family
+  'CM_RN':    { label:'Case Manager (RN)',  color:'#9B89C4', category:'cm',        badge:'RN',         badgeBg:'#9B89C4' },
+  'CM_LPN':   { label:'Case Manager (LPN)', color:'#B8A0C8', category:'cm',        badge:'LPN',        badgeBg:'#B8A0C8' },
+  'CM_SUP':   { label:'Supervisor',         color:'#5C3D8F', category:'cm',        badge:'⭐ SUP',     badgeBg:'#5C3D8F' },
+  'CM_DIR':   { label:'Director',           color:'#3B2060', category:'cm',        badge:'👑 DIR',     badgeBg:'#3B2060' },
+  // Admit / On-Call — blue family
+  'ADMIT_FT': { label:'Admit RN (FT)',      color:'#60a5fa', category:'admit',     badge:'Admit FT',   badgeBg:'#60a5fa' },
+  'ADMIT_PRN':{ label:'Admit RN (PRN)',     color:'#3b82f6', category:'admit',     badge:'Admit PRN',  badgeBg:'#3b82f6' },
+  'ONCALL':   { label:'On-Call RN',         color:'#1e3a8a', category:'oncall',    badge:'🌙 On-Call', badgeBg:'#1e3a8a' },
+  // Ancillary staff — warm color family
+  'HCA':      { label:'HCA',               color:'#fb923c', category:'ancillary', badge:'HCA',        badgeBg:'#fb923c' },
+  'CLERGY':   { label:'Clergy',            color:'#a78bfa', category:'ancillary', badge:'✝ Clergy',   badgeBg:'#a78bfa' },
+  'MCW':      { label:'Medical Social Worker', color:'#34d399', category:'ancillary', badge:'MCW',    badgeBg:'#34d399' },
+  'LIAISON':  { label:'Liaison',           color:'#f472b6', category:'ancillary', badge:'Liaison',    badgeBg:'#f472b6' },
+  'PROVIDER': { label:'Provider',          color:'#0ea5e9', category:'ancillary', badge:'Provider',   badgeBg:'#0ea5e9' },
+  'OFFICE':   { label:'Office Staff',      color:'#94a3b8', category:'ancillary', badge:'Office',     badgeBg:'#94a3b8' },
+  'OTHER':    { label:'Other',             color:'#64748b', category:'ancillary', badge:'Other',      badgeBg:'#64748b' },
 };
 
 function getRoleConfig(roleKey) {
@@ -821,7 +920,7 @@ function save() {
     nurses:      nurses.map(n=>({id:n.id,name:n.name,color:n.color,nurseType:n.nurseType||'RN',credentials:n.credentials||'',phone:n.phone||'',employmentStatus:n.employmentStatus||'active',zoneKey:n.zoneKey,counties:n.counties,cities:n.cities,facilities:n.facilities||[],path:n.path,homeAddress:n.homeAddress||'',homeLat:n.homeLat||null,homeLng:n.homeLng||null,distanceThreshold:n.distanceThreshold||null})),
     globalDistanceThreshold,
     admitNurses: admitNurses.map(a=>({id:a.id,name:a.name,admitType:a.admitType||'FullTime',employmentStatus:a.employmentStatus||'active',credentials:a.credentials||'',zoneKey:a.zoneKey,lat:a.lat,lng:a.lng,address:a.address,monthlyCount:a.monthlyCount||0,ytdCount:a.ytdCount||0,evalCount:a.evalCount||0,lastResetMonth:a.lastResetMonth,lastResetYear:a.lastResetYear})),
-    staff:       staff.map(s=>({id:s.id,name:s.name,role:s.role,zoneKey:s.zoneKey,nurseIds:s.nurseIds,lat:s.lat,lng:s.lng,address:s.address})),
+    staff:       staff.map(s=>({id:s.id,name:s.name,role:s.role,label:s.label||'',color:s.color||'#64748b',credentials:s.credentials||'',phone:s.phone||'',idtTeam:s.idtTeam||'',employmentStatus:s.employmentStatus||'active',zoneKey:s.zoneKey,lat:s.lat,lng:s.lng,address:s.address||''})),
     patients:    patients.map(p=>({id:p.id,name:p.name,address:p.address,lat:p.lat,lng:p.lng,nurseId:p.nurseId,admitId:p.admitId,admitterType:p.admitterType||null,admitDate:p.admitDate||null,locType:p.locType,facilityName:p.facilityName,facilityId:p.facilityId||null,roomNote:p.roomNote||null,status:p.status||'active',isReadmit:p.isReadmit||false,hospitalId:p.hospitalId||null})),
   }));
 }
@@ -1275,12 +1374,18 @@ function normalizeCol(str){ return (str||'').toString().toLowerCase().replace(/[
 // Map role text to internal type
 function parseRole(raw){
   const r = (raw||'').toString().toLowerCase().trim();
-  if(r.includes('supervisor'))                                            return {category:'cm',    type:'Supervisor'};
-  if(r.includes('director'))                                              return {category:'cm',    type:'Director'};
-  if(r.includes('lpn'))                                                   return {category:'cm',    type:'LPN'};
-  if(r.includes('on-call')||r.includes('oncall')||r.includes('on call')) return {category:'admit', admitType:'OnCall'};
-  if(r.includes('admit'))                                                 return {category:'admit', admitType:'FullTime'};
-  // Status (PRN/FT) in role column — just treat as CM RN
+  if(r.includes('supervisor'))                                             return {category:'cm',        type:'Supervisor'};
+  if(r.includes('director'))                                               return {category:'cm',        type:'Director'};
+  if(r.includes('lpn'))                                                    return {category:'cm',        type:'LPN'};
+  if(r.includes('on-call')||r.includes('oncall')||r.includes('on call'))  return {category:'admit',     admitType:'OnCall'};
+  if(r.includes('admit'))                                                  return {category:'admit',     admitType:'FullTime'};
+  if(r.includes('hca'))                                                    return {category:'ancillary', roleKey:'HCA'};
+  if(r.includes('clergy')||r.includes('chaplain')||r.includes('pastor'))  return {category:'ancillary', roleKey:'CLERGY'};
+  if(r.includes('social')||r.includes('msw')||r.includes('mcw'))          return {category:'ancillary', roleKey:'MCW'};
+  if(r.includes('liaison'))                                                return {category:'ancillary', roleKey:'LIAISON'};
+  if(r.includes('provider')||r.includes('physician')||r.includes('np')||r.includes('pa')) return {category:'ancillary', roleKey:'PROVIDER'};
+  if(r.includes('office')||r.includes('admin')||r.includes('coordinator'))return {category:'ancillary', roleKey:'OFFICE'};
+  if(r.includes('other'))                                                  return {category:'ancillary', roleKey:'OTHER'};
   return {category:'cm', type:'RN'};
 }
 
@@ -1291,7 +1396,7 @@ function parseStatus(raw){
   if(s.includes('leave')||s.includes('loa'))    return 'loa';
   if(s.includes('part')||s.includes('pt'))      return 'parttime';
   if(s.includes('prn'))                          return 'prn';
-  return 'active';
+  return 'active'; // full time = active internally
 }
 
 // Map zone text to internal key
@@ -1345,16 +1450,46 @@ async function importStaffExcel(e){
         const streetAddr = getVal(row,'home street address','street address','address','street');
         const city       = getVal(row,'home city','city');
         const state      = getVal(row,'home state','state') || 'GA';
-        // Build address — use full address if street provided, otherwise just city/state
-        const address = streetAddr
-          ? [streetAddr, city, state].filter(Boolean).join(', ')
-          : city ? [city, state].filter(Boolean).join(', ') : '';
+        const zip        = getVal(row,'home zip','zip','zip code','postal');
+        // Build address — street+city+state+zip if available, or just city/state/zip
+        const addrParts = streetAddr
+          ? [streetAddr, city, state, zip].filter(Boolean)
+          : [city, state, zip].filter(Boolean);
+        const address = addrParts.join(', ');
+        const idtTeam = getVal(row,'idt team','idt','team');
 
         const role   = parseRole(roleRaw);
         const status = parseStatus(statusRaw);
         const zone   = parseZone(zoneRaw);
 
-        if(role.category === 'admit'){
+        if(role.category === 'ancillary'){
+          // Add to staff array
+          const existing = staff.find(s=>s.name.toLowerCase()===name.toLowerCase());
+          const roleKey = role.roleKey||'OTHER';
+          const roleCfg = ROLES_CONFIG[roleKey];
+          if(existing){
+            existing.role             = roleKey;
+            existing.employmentStatus = status;
+            existing.credentials      = creds||existing.credentials;
+            existing.phone            = phone||existing.phone;
+            existing.idtTeam          = idtTeam||existing.idtTeam||'';
+            existing.zoneKey          = zone;
+            if(address && address!==existing.address) toGeocode.push({type:'staff',id:existing.id,address});
+            updated++;
+          } else {
+            const obj = {
+              id:'s_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),
+              name, role:roleKey, label:roleCfg?.label||'Other',
+              color:roleCfg?.color||'#64748b',
+              credentials:creds, phone, idtTeam:idtTeam||'',
+              employmentStatus:status, zoneKey:zone,
+              address, lat:null, lng:null, marker:null,
+            };
+            if(address) toGeocode.push({type:'staff',id:obj.id,address});
+            staff.push(obj);
+            added++;
+          }
+        } else if(role.category === 'admit'){
           // Find existing or create new admit nurse
           const existing = admitNurses.find(a=>a.name.toLowerCase()===name.toLowerCase());
           if(existing){
@@ -1388,6 +1523,7 @@ async function importStaffExcel(e){
             existing.employmentStatus = status;
             existing.credentials      = creds||existing.credentials;
             existing.phone            = phone||existing.phone;
+            existing.idtTeam          = idtTeam||existing.idtTeam||'';
             existing.zoneKey          = zone;
             if(address && address!==existing.homeAddress) toGeocode.push({type:'nurse',id:existing.id,address});
             updated++;
@@ -1396,6 +1532,7 @@ async function importStaffExcel(e){
               id:'n_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),
               name, color:getNurseColor(role.type||'RN'),
               nurseType:role.type||'RN', credentials:creds, phone,
+              idtTeam: idtTeam||'',
               employmentStatus:status, zoneKey:zone,
               counties:[], cities:[], facilities:[],
               homeAddress:address, homeLat:null, homeLng:null, homeMarker:null,
@@ -1418,20 +1555,13 @@ async function importStaffExcel(e){
                 const loc=results[0].geometry.location;
                 if(item.type==='nurse'){
                   const n=nurses.find(x=>x.id===item.id);
-                  if(n){
-                    n.homeLat=loc.lat(); n.homeLng=loc.lng();
-                    n.homeAddress=results[0].formatted_address;
-                    if(n.homeMarker) n.homeMarker.setMap(null);
-                    n.homeMarker=placeHomeMarker(n.homeLat,n.homeLng,n);
-                  }
-                } else {
+                  if(n){n.homeLat=loc.lat();n.homeLng=loc.lng();n.homeAddress=results[0].formatted_address;if(n.homeMarker)n.homeMarker.setMap(null);n.homeMarker=placeHomeMarker(n.homeLat,n.homeLng,n);}
+                } else if(item.type==='admit'){
                   const a=admitNurses.find(x=>x.id===item.id);
-                  if(a){
-                    a.lat=loc.lat(); a.lng=loc.lng();
-                    a.address=results[0].formatted_address;
-                    if(a.marker) a.marker.setMap(null);
-                    a.marker=placeStaffPin(a.lat,a.lng,a.name,'Admit',getAdmitColor(a.admitType));
-                  }
+                  if(a){a.lat=loc.lat();a.lng=loc.lng();a.address=results[0].formatted_address;if(a.marker)a.marker.setMap(null);a.marker=placeStaffPin(a.lat,a.lng,a.name,'Admit',getAdmitColor(a.admitType));}
+                } else if(item.type==='staff'){
+                  const s=staff.find(x=>x.id===item.id);
+                  if(s){s.lat=loc.lat();s.lng=loc.lng();s.address=results[0].formatted_address;if(s.marker)s.marker.setMap(null);s.marker=placeStaffPin(s.lat,s.lng,s.name,s.role);}
                 }
               }
               setTimeout(resolve, 200); // small delay between geocode calls
@@ -1453,92 +1583,14 @@ async function importStaffExcel(e){
 }
 
 function downloadStaffTemplate(){
-  if(typeof XLSX === 'undefined'){ showToast('Spreadsheet library not loaded yet — try again','err'); return; }
-
-  const headers = ['Name','Role','Status','Zone','Credentials','Phone','Home Street Address','Home City','Home State'];
-
-  // Example rows with pre-filled dropdowns
-  const examples = [
-    ['Jane Smith',   'Case Manager RN',  'Active', 'East Georgia','BSN, RN, CHPN','(555) 123-4567','123 Main St','Monroe',      'GA'],
-    ['John Doe',     'Case Manager LPN', 'Active', 'East Georgia','LPN',           '(555) 234-5678','',           'Watkinsville', 'GA'],
-    ['Sarah Jones',  'Supervisor',       'Active', 'East Georgia','MSN, RN',       '(555) 345-6789','',           'Athens',       'GA'],
-    ['Mike Brown',   'Admit RN',         'Active', 'East Georgia','RN',            '(555) 456-7890','321 Elm St', 'Gainesville',  'GA'],
-    ['Lisa Green',   'On-Call RN',       'PRN',    'East Georgia','RN',            '(555) 567-8901','',           'Lawrenceville','GA'],
-    ['Tom Davis',    'Director',         'Active', 'East Georgia','DNP, RN',       '(555) 678-9012','',           'Monroe',       'GA'],
-  ];
-
-  // Blank data rows for filling in (50 rows)
-  const blankRows = Array.from({length:50}, ()=>['','Case Manager RN','Active','East Georgia','','','','','GA']);
-
-  const ws = XLSX.utils.aoa_to_sheet([headers, ...examples, ...blankRows]);
-
-  // Column widths
-  ws['!cols'] = [{wch:22},{wch:20},{wch:16},{wch:14},{wch:22},{wch:16},{wch:26},{wch:18},{wch:8}];
-
-  // ── Data validation dropdowns ────────────────────────────
-  // SheetJS open source doesn't support data validation natively
-  // but we can add it via raw XML using the sheet's !validations or by
-  // embedding in a helper sheet approach — use a Validation sheet instead
-
-  // Create a hidden validation sheet with valid values
-  const validationData = [
-    ['Role',             'Status',           'Zone'],
-    ['Case Manager RN',  'Active',           'East Georgia'],
-    ['Case Manager LPN', 'Part Time',        'Atlanta'],
-    ['Supervisor',       'PRN',              'Augusta'],
-    ['Director',         'Leave of Absence', ''],
-    ['Admit RN',         'Alumni',           ''],
-    ['On-Call RN',       '',                 ''],
-  ];
-  const wsValid = XLSX.utils.aoa_to_sheet(validationData);
-
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Staff Import');
-  XLSX.utils.book_append_sheet(wb, wsValid, 'Valid Values');
-
-  // Add data validation using raw XML injection
-  // Role column = B (index 1), rows 2-51
-  // Status column = C (index 2), rows 2-51
-  // Zone column = D (index 3), rows 2-51
-  const roleList   = '"Case Manager RN,Case Manager LPN,Supervisor,Director,Admit RN,On-Call RN"';
-  const statusList = '"Active,Part Time,PRN,Leave of Absence,Alumni"';
-  const zoneList   = '"East Georgia,Atlanta,Augusta"';
-
-  // Build dataValidations XML
-  const dvXml = `<dataValidations count="3">
-    <dataValidation type="list" allowBlank="1" showDropDown="0" sqref="B2:B201">
-      <formula1>${roleList}</formula1>
-    </dataValidation>
-    <dataValidation type="list" allowBlank="1" showDropDown="0" sqref="C2:C201">
-      <formula1>${statusList}</formula1>
-    </dataValidation>
-    <dataValidation type="list" allowBlank="1" showDropDown="0" sqref="D2:D201">
-      <formula1>${zoneList}</formula1>
-    </dataValidation>
-  </dataValidations>`;
-
-  // Inject into worksheet XML
-  if(!ws['!raw']) ws['!raw'] = {};
-  ws['!raw']['dataValidations'] = dvXml;
-
-  // Use write with bookVBA option for compatibility
-  const wbOpts = {bookType:'xlsx', type:'binary'};
-
-  // Manual injection approach — patch the XML after generation
-  const wbOut = XLSX.write(wb, {bookType:'xlsx', type:'binary'});
-
-  // Convert to blob and trigger download
-  const buf = new ArrayBuffer(wbOut.length);
-  const view = new Uint8Array(buf);
-  for(let i=0;i<wbOut.length;i++) view[i] = wbOut.charCodeAt(i) & 0xFF;
-  const blob = new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
-  const url = URL.createObjectURL(blob);
+  // Link to pre-built template hosted on GitHub alongside the app
   const a = document.createElement('a');
-  a.href=url; a.download='CareCompass_Staff_Template.xlsx';
-  document.body.appendChild(a); a.click();
-  document.body.removeChild(a); URL.revokeObjectURL(url);
-
-  showToast('Template downloaded ✓ — see Valid Values tab for options','ok');
+  a.href = 'CareCompass_Staff_Template.xlsx';
+  a.download = 'CareCompass_Staff_Template.xlsx';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  showToast('Template downloading ✓','ok');
 }
 
 // ─── HOME MARKERS & DISTANCE ALERTS ─────────────────────
@@ -1666,12 +1718,18 @@ function normalizeCol(str){ return (str||'').toString().toLowerCase().replace(/[
 // Map role text to internal type
 function parseRole(raw){
   const r = (raw||'').toString().toLowerCase().trim();
-  if(r.includes('supervisor'))                                            return {category:'cm',    type:'Supervisor'};
-  if(r.includes('director'))                                              return {category:'cm',    type:'Director'};
-  if(r.includes('lpn'))                                                   return {category:'cm',    type:'LPN'};
-  if(r.includes('on-call')||r.includes('oncall')||r.includes('on call')) return {category:'admit', admitType:'OnCall'};
-  if(r.includes('admit'))                                                 return {category:'admit', admitType:'FullTime'};
-  // Status (PRN/FT) in role column — just treat as CM RN
+  if(r.includes('supervisor'))                                             return {category:'cm',        type:'Supervisor'};
+  if(r.includes('director'))                                               return {category:'cm',        type:'Director'};
+  if(r.includes('lpn'))                                                    return {category:'cm',        type:'LPN'};
+  if(r.includes('on-call')||r.includes('oncall')||r.includes('on call'))  return {category:'admit',     admitType:'OnCall'};
+  if(r.includes('admit'))                                                  return {category:'admit',     admitType:'FullTime'};
+  if(r.includes('hca'))                                                    return {category:'ancillary', roleKey:'HCA'};
+  if(r.includes('clergy')||r.includes('chaplain')||r.includes('pastor'))  return {category:'ancillary', roleKey:'CLERGY'};
+  if(r.includes('social')||r.includes('msw')||r.includes('mcw'))          return {category:'ancillary', roleKey:'MCW'};
+  if(r.includes('liaison'))                                                return {category:'ancillary', roleKey:'LIAISON'};
+  if(r.includes('provider')||r.includes('physician')||r.includes('np')||r.includes('pa')) return {category:'ancillary', roleKey:'PROVIDER'};
+  if(r.includes('office')||r.includes('admin')||r.includes('coordinator'))return {category:'ancillary', roleKey:'OFFICE'};
+  if(r.includes('other'))                                                  return {category:'ancillary', roleKey:'OTHER'};
   return {category:'cm', type:'RN'};
 }
 
@@ -1682,7 +1740,7 @@ function parseStatus(raw){
   if(s.includes('leave')||s.includes('loa'))    return 'loa';
   if(s.includes('part')||s.includes('pt'))      return 'parttime';
   if(s.includes('prn'))                          return 'prn';
-  return 'active';
+  return 'active'; // full time = active internally
 }
 
 // Map zone text to internal key
@@ -1736,16 +1794,46 @@ async function importStaffExcel(e){
         const streetAddr = getVal(row,'home street address','street address','address','street');
         const city       = getVal(row,'home city','city');
         const state      = getVal(row,'home state','state') || 'GA';
-        // Build address — use full address if street provided, otherwise just city/state
-        const address = streetAddr
-          ? [streetAddr, city, state].filter(Boolean).join(', ')
-          : city ? [city, state].filter(Boolean).join(', ') : '';
+        const zip        = getVal(row,'home zip','zip','zip code','postal');
+        // Build address — street+city+state+zip if available, or just city/state/zip
+        const addrParts = streetAddr
+          ? [streetAddr, city, state, zip].filter(Boolean)
+          : [city, state, zip].filter(Boolean);
+        const address = addrParts.join(', ');
+        const idtTeam = getVal(row,'idt team','idt','team');
 
         const role   = parseRole(roleRaw);
         const status = parseStatus(statusRaw);
         const zone   = parseZone(zoneRaw);
 
-        if(role.category === 'admit'){
+        if(role.category === 'ancillary'){
+          // Add to staff array
+          const existing = staff.find(s=>s.name.toLowerCase()===name.toLowerCase());
+          const roleKey = role.roleKey||'OTHER';
+          const roleCfg = ROLES_CONFIG[roleKey];
+          if(existing){
+            existing.role             = roleKey;
+            existing.employmentStatus = status;
+            existing.credentials      = creds||existing.credentials;
+            existing.phone            = phone||existing.phone;
+            existing.idtTeam          = idtTeam||existing.idtTeam||'';
+            existing.zoneKey          = zone;
+            if(address && address!==existing.address) toGeocode.push({type:'staff',id:existing.id,address});
+            updated++;
+          } else {
+            const obj = {
+              id:'s_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),
+              name, role:roleKey, label:roleCfg?.label||'Other',
+              color:roleCfg?.color||'#64748b',
+              credentials:creds, phone, idtTeam:idtTeam||'',
+              employmentStatus:status, zoneKey:zone,
+              address, lat:null, lng:null, marker:null,
+            };
+            if(address) toGeocode.push({type:'staff',id:obj.id,address});
+            staff.push(obj);
+            added++;
+          }
+        } else if(role.category === 'admit'){
           // Find existing or create new admit nurse
           const existing = admitNurses.find(a=>a.name.toLowerCase()===name.toLowerCase());
           if(existing){
@@ -1779,6 +1867,7 @@ async function importStaffExcel(e){
             existing.employmentStatus = status;
             existing.credentials      = creds||existing.credentials;
             existing.phone            = phone||existing.phone;
+            existing.idtTeam          = idtTeam||existing.idtTeam||'';
             existing.zoneKey          = zone;
             if(address && address!==existing.homeAddress) toGeocode.push({type:'nurse',id:existing.id,address});
             updated++;
@@ -1787,6 +1876,7 @@ async function importStaffExcel(e){
               id:'n_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),
               name, color:getNurseColor(role.type||'RN'),
               nurseType:role.type||'RN', credentials:creds, phone,
+              idtTeam: idtTeam||'',
               employmentStatus:status, zoneKey:zone,
               counties:[], cities:[], facilities:[],
               homeAddress:address, homeLat:null, homeLng:null, homeMarker:null,
@@ -1809,20 +1899,13 @@ async function importStaffExcel(e){
                 const loc=results[0].geometry.location;
                 if(item.type==='nurse'){
                   const n=nurses.find(x=>x.id===item.id);
-                  if(n){
-                    n.homeLat=loc.lat(); n.homeLng=loc.lng();
-                    n.homeAddress=results[0].formatted_address;
-                    if(n.homeMarker) n.homeMarker.setMap(null);
-                    n.homeMarker=placeHomeMarker(n.homeLat,n.homeLng,n);
-                  }
-                } else {
+                  if(n){n.homeLat=loc.lat();n.homeLng=loc.lng();n.homeAddress=results[0].formatted_address;if(n.homeMarker)n.homeMarker.setMap(null);n.homeMarker=placeHomeMarker(n.homeLat,n.homeLng,n);}
+                } else if(item.type==='admit'){
                   const a=admitNurses.find(x=>x.id===item.id);
-                  if(a){
-                    a.lat=loc.lat(); a.lng=loc.lng();
-                    a.address=results[0].formatted_address;
-                    if(a.marker) a.marker.setMap(null);
-                    a.marker=placeStaffPin(a.lat,a.lng,a.name,'Admit',getAdmitColor(a.admitType));
-                  }
+                  if(a){a.lat=loc.lat();a.lng=loc.lng();a.address=results[0].formatted_address;if(a.marker)a.marker.setMap(null);a.marker=placeStaffPin(a.lat,a.lng,a.name,'Admit',getAdmitColor(a.admitType));}
+                } else if(item.type==='staff'){
+                  const s=staff.find(x=>x.id===item.id);
+                  if(s){s.lat=loc.lat();s.lng=loc.lng();s.address=results[0].formatted_address;if(s.marker)s.marker.setMap(null);s.marker=placeStaffPin(s.lat,s.lng,s.name,s.role);}
                 }
               }
               setTimeout(resolve, 200); // small delay between geocode calls
@@ -3500,6 +3583,171 @@ function saveStaff(){
   } else finish(null,null,addr);
 }
 
+let _editingStaffId = null;
+let _sePreGeoLat = null, _sePreGeoLng = null, _sePreGeoAddr = null;
+
+function openEditStaff(id){
+  const s = staff.find(x=>x.id===id); if(!s) return;
+  _editingStaffId = id;
+  _sePreGeoLat = s.lat||null; _sePreGeoLng = s.lng||null; _sePreGeoAddr = s.address||null;
+  document.getElementById('seNa').value       = s.name||'';
+  document.getElementById('seRole').value     = s.role||'OTHER';
+  document.getElementById('seStatus').value   = s.employmentStatus||'active';
+  document.getElementById('seIDT').value      = s.idtTeam||'';
+  document.getElementById('seZone').value     = s.zoneKey||'eastga';
+  document.getElementById('seCreds').value    = s.credentials||'';
+  document.getElementById('sePhone').value    = s.phone||'';
+  document.getElementById('seAddr').value     = s.address||'';
+  document.getElementById('seAddrStatus').textContent = s.address?'✓ '+s.address:'';
+  openModal('staffEditModal');
+}
+
+// Universal open for nurses too — route to correct modal
+function openEditUniversal(id, kind){
+  if(kind==='nurse') openNurseTerrModal(id);
+  else if(kind==='admit') openEditAdmit(id);
+  else openEditStaff(id);
+}
+
+function openAddAncillaryModal(){
+  const name = document.getElementById('ancillaryNameInput')?.value.trim();
+  const role = document.getElementById('ancillaryRoleInput')?.value||'OTHER';
+  const zone = document.getElementById('ancillaryZoneInput')?.value||'eastga';
+  if(!name){ showToast('Enter a name','err'); return; }
+  // Pre-fill staff modal for new entry
+  _editingStaffId = '__new__';
+  _sePreGeoLat=null; _sePreGeoLng=null; _sePreGeoAddr=null;
+  document.getElementById('seNa').value     = name;
+  document.getElementById('seRole').value   = role;
+  document.getElementById('seStatus').value = 'active';
+  document.getElementById('seIDT').value    = '';
+  document.getElementById('seZone').value   = zone;
+  document.getElementById('seCreds').value  = '';
+  document.getElementById('sePhone').value  = '';
+  document.getElementById('seAddr').value   = '';
+  document.getElementById('seAddrStatus').textContent = '';
+  openModal('staffEditModal');
+}
+
+function searchSeAddr(){
+  if(!mapsLoaded||!google.maps.places) return;
+  const input=document.getElementById('seAddr');
+  const suggestBox=document.getElementById('seAddrSuggestions');
+  const val=input.value.trim();
+  if(!val){suggestBox.style.display='none';return;}
+  const svc=new google.maps.places.AutocompleteService();
+  svc.getPlacePredictions({input:val,componentRestrictions:{country:'us'},types:['address','(cities)']},
+  (predictions,status)=>{
+    if(status!=='OK'||!predictions){suggestBox.style.display='none';return;}
+    suggestBox.innerHTML=predictions.slice(0,5).map(p=>
+      `<div data-place-id="${p.place_id}" data-desc="${p.description.replace(/"/g,'&quot;')}"
+        style="padding:8px 10px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border)"
+        onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+        <div style="font-weight:500">${p.structured_formatting?.main_text||p.description}</div>
+        <div style="font-size:10px;color:var(--muted)">${p.structured_formatting?.secondary_text||''}</div>
+      </div>`
+    ).join('');
+    suggestBox.style.display='block';
+    suggestBox.querySelectorAll('div[data-place-id]').forEach(el=>{
+      el.addEventListener('click',()=>{
+        input.value=el.dataset.desc; suggestBox.style.display='none';
+        document.getElementById('seAddrStatus').textContent='Geocoding…';
+        geocoder.geocode({placeId:el.dataset.placeId},(results,status)=>{
+          if(status==='OK'&&results[0]){
+            _sePreGeoLat=results[0].geometry.location.lat();
+            _sePreGeoLng=results[0].geometry.location.lng();
+            _sePreGeoAddr=results[0].formatted_address;
+            input.value=_sePreGeoAddr;
+            document.getElementById('seAddrStatus').textContent='✓ '+_sePreGeoAddr;
+            document.getElementById('seAddrStatus').style.color='var(--accent2)';
+          }
+        });
+      });
+    });
+  });
+}
+
+function saveStaffEdit(){
+  const name   = document.getElementById('seNa').value.trim();
+  const role   = document.getElementById('seRole').value;
+  const status = document.getElementById('seStatus').value;
+  const idtTeam= document.getElementById('seIDT').value;
+  const zone   = document.getElementById('seZone').value;
+  const creds  = document.getElementById('seCreds').value.trim();
+  const phone  = document.getElementById('sePhone').value.trim();
+  const addrRaw= document.getElementById('seAddr').value.trim();
+  if(!name){ showToast('Name is required','err'); return; }
+
+  const roleCfg = ROLES_CONFIG[role]||ROLES_CONFIG['OTHER'];
+  const isNew = _editingStaffId==='__new__';
+
+  // Route to appropriate list based on role category
+  const cat = roleCfg.category;
+
+  if(cat==='cm'||cat==='admit'||cat==='oncall'){
+    // Route to nurses or admitNurses
+    if(cat==='cm'){
+      const typeMap={'CM_RN':'RN','CM_LPN':'LPN','CM_SUP':'Supervisor','CM_DIR':'Director'};
+      if(isNew){
+        const n={id:'n_'+Date.now(),name,color:roleCfg.color,nurseType:typeMap[role]||'RN',
+          credentials:creds,phone,idtTeam,employmentStatus:status,zoneKey:zone,
+          counties:[],cities:[],facilities:[],homeAddress:addrRaw,homeLat:_sePreGeoLat,
+          homeLng:_sePreGeoLng,homeMarker:null,distanceThreshold:null,polygon:null,path:null,facilityMarkers:[]};
+        if(_sePreGeoLat&&_sePreGeoLng) n.homeMarker=placeHomeMarker(_sePreGeoLat,_sePreGeoLng,n);
+        else if(addrRaw&&mapsLoaded) geocodeNurseHome(n.id,addrRaw);
+        nurses.push(n);
+      } else {
+        const n=nurses.find(x=>x.id===_editingStaffId); if(n){
+          n.name=name;n.nurseType=typeMap[role]||'RN';n.color=roleCfg.color;
+          n.credentials=creds;n.phone=phone;n.idtTeam=idtTeam;n.employmentStatus=status;n.zoneKey=zone;
+          if(addrRaw!==n.homeAddress){n.homeAddress=addrRaw;if(n.homeMarker){n.homeMarker.setMap(null);n.homeMarker=null;}if(addrRaw&&mapsLoaded)geocodeNurseHome(n.id,addrRaw);}
+        }
+      }
+    } else {
+      const admitTypeMap={'ADMIT_FT':'FullTime','ADMIT_PRN':'PRN','ONCALL':'OnCall'};
+      const aType=admitTypeMap[role]||'FullTime';
+      const now=new Date();
+      if(isNew){
+        const a={id:'a_'+Date.now(),name,admitType:aType,credentials:creds,phone,idtTeam,
+          employmentStatus:status,zoneKey:zone,address:addrRaw,lat:_sePreGeoLat,lng:_sePreGeoLng,marker:null,
+          monthlyCount:0,ytdCount:0,evalCount:0,lastResetMonth:now.getMonth(),lastResetYear:now.getFullYear()};
+        if(_sePreGeoLat&&_sePreGeoLng) a.marker=placeStaffPin(_sePreGeoLat,_sePreGeoLng,name,'Admit',getAdmitColor(aType));
+        admitNurses.push(a);
+      } else {
+        const a=admitNurses.find(x=>x.id===_editingStaffId); if(a){
+          a.name=name;a.admitType=aType;a.credentials=creds;a.phone=phone;a.idtTeam=idtTeam;
+          a.employmentStatus=status;a.zoneKey=zone;
+          if(addrRaw!==a.address){a.address=addrRaw;if(a.marker){a.marker.setMap(null);a.marker=null;}
+            if(_sePreGeoLat&&_sePreGeoLng)a.marker=placeStaffPin(_sePreGeoLat,_sePreGeoLng,name,'Admit',getAdmitColor(aType));}
+        }
+      }
+    }
+  } else {
+    // Ancillary staff
+    if(isNew){
+      const s={id:'s_'+Date.now(),name,role,label:roleCfg.label,color:roleCfg.color,
+        credentials:creds,phone,idtTeam,employmentStatus:status,zoneKey:zone,
+        address:addrRaw,lat:_sePreGeoLat,lng:_sePreGeoLng,marker:null};
+      if(_sePreGeoLat&&_sePreGeoLng) s.marker=placeStaffPin(_sePreGeoLat,_sePreGeoLng,name,role);
+      staff.push(s);
+    } else {
+      const s=staff.find(x=>x.id===_editingStaffId); if(s){
+        s.name=name;s.role=role;s.label=roleCfg.label;s.color=roleCfg.color;
+        s.credentials=creds;s.phone=phone;s.idtTeam=idtTeam;s.employmentStatus=status;s.zoneKey=zone;
+        if(addrRaw!==s.address){s.address=addrRaw;if(s.marker){s.marker.setMap(null);s.marker=null;}
+          if(_sePreGeoLat&&_sePreGeoLng)s.marker=placeStaffPin(_sePreGeoLat,_sePreGeoLng,name,role);}
+      }
+    }
+  }
+
+  closeModal('staffEditModal');
+  renderAll(); save(); applyViewVisibility();
+  showToast(name+' saved ✓','ok');
+  // Clear add form inputs
+  const ni=document.getElementById('ancillaryNameInput');
+  if(ni) ni.value='';
+}
+
 function deleteStaff(id){
   const idx=staff.findIndex(s=>s.id===id); if(idx<0) return;
   if(staff[idx].marker)staff[idx].marker.setMap(null);
@@ -3748,6 +3996,15 @@ function getTeamFilterMembers(){
       admits: admitNurses.filter(a=>a.admitType==='OnCall'&&(currentView==='all'||a.zoneKey===currentView)),
       staff: []
     };
+    case 'ancillary': return {
+      nurses:[], admits:[],
+      staff: staff.filter(s=>zf(s.zoneKey))
+    };
+    case 'HCA': case 'CLERGY': case 'MCW': case 'LIAISON':
+    case 'PROVIDER': case 'OFFICE': case 'OTHER': return {
+      nurses:[], admits:[],
+      staff: staff.filter(s=>s.role===teamFilter&&zf(s.zoneKey))
+    };
     default: return {
       nurses: nurses.filter(n=>(n.nurseType||'RN')===teamFilter && zf(n)),
       admits: [], staff: []
@@ -3758,9 +4015,30 @@ function getTeamFilterMembers(){
 function renderTeamAddForm(){
   const el=document.getElementById('teamAddForm'); if(!el) return;
   const isAdmit = teamFilter==='admit'||teamFilter==='OnCall';
+  const isAncillary = ['ancillary','HCA','CLERGY','MCW','LIAISON','PROVIDER','OFFICE','OTHER'].includes(teamFilter);
   const isAllNurses = teamFilter==='allnurses';
 
-  if(isAdmit){
+  if(isAncillary){
+    const roleDefault = teamFilter==='ancillary'?'HCA':teamFilter;
+    el.innerHTML=`<div style="display:flex;flex-direction:column;gap:6px">
+      <input type="text" id="ancillaryNameInput" placeholder="Full name" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px;padding:6px 9px;outline:none"/>
+      <select id="ancillaryRoleInput" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px;padding:6px 9px;outline:none">
+        <option value="HCA" ${roleDefault==='HCA'?'selected':''}>HCA</option>
+        <option value="CLERGY" ${roleDefault==='CLERGY'?'selected':''}>Clergy</option>
+        <option value="MCW" ${roleDefault==='MCW'?'selected':''}>Medical Social Worker</option>
+        <option value="LIAISON" ${roleDefault==='LIAISON'?'selected':''}>Liaison</option>
+        <option value="PROVIDER" ${roleDefault==='PROVIDER'?'selected':''}>Provider</option>
+        <option value="OFFICE" ${roleDefault==='OFFICE'?'selected':''}>Office Staff</option>
+        <option value="OTHER" ${roleDefault==='OTHER'?'selected':''}>Other</option>
+      </select>
+      <select id="ancillaryZoneInput" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px;padding:6px 9px;outline:none">
+        <option value="atlanta">Atlanta</option>
+        <option value="eastga" selected>East Georgia</option>
+        <option value="augusta">Augusta</option>
+      </select>
+      <button class="btn" onclick="openAddAncillaryModal()">+ Add Staff</button>
+    </div>`;
+  } else if(isAdmit){
     el.innerHTML=`<div style="display:flex;flex-direction:column;gap:6px">
       <input type="text" id="admitNameInput" placeholder="Full name" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px;padding:6px 9px;outline:none"/>
       <select id="admitZoneInput" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px;padding:6px 9px;outline:none">
@@ -3810,8 +4088,12 @@ function renderTeamList(){
   if(hdr) hdr.textContent=labels[teamFilter]||'Team';
 
   const {nurses:filteredNurses, admits:filteredAdmits} = getTeamFilterMembers();
-  const allMembers = [...filteredNurses.map(n=>({...n,_kind:'nurse'})), ...filteredAdmits.map(a=>({...a,_kind:'admit'}))]
-    .sort((a,b)=>a.name.localeCompare(b.name));
+  const {staff:filteredStaff=[]} = getTeamFilterMembers();
+  const allMembers = [
+    ...filteredNurses.map(n=>({...n,_kind:'nurse'})),
+    ...filteredAdmits.map(a=>({...a,_kind:'admit'})),
+    ...filteredStaff.map(s=>({...s,_kind:'staff'})),
+  ].sort((a,b)=>a.name.localeCompare(b.name));
 
   // Update type legend
   const typeLeg=document.getElementById('nurseTypeLegend');
@@ -3847,6 +4129,7 @@ function renderTeamList(){
         <div style="font-size:10px;color:${OFFICE_ZONES[m.zoneKey]?.color||'var(--muted)'};margin-top:2px">${OFFICE_ZONES[m.zoneKey]?.label||m.zoneKey}</div>
         ${m.credentials?'<div style="font-size:10px;color:var(--muted);margin-top:2px;font-style:italic">'+m.credentials+'</div>':''}
         ${m.phone?'<div style="font-size:11px;color:var(--text);margin-top:2px">📞 <a href="tel:'+m.phone+'" style="color:inherit;text-decoration:none">'+m.phone+'</a></div>':''}
+        ${m.idtTeam?'<span style="font-size:9px;padding:1px 6px;border-radius:10px;font-weight:600;'+(m.idtTeam==='Purple'?'background:rgba(155,137,196,.2);color:#6B3FA0':'background:rgba(59,130,246,.15);color:#3b82f6')+'">'+m.idtTeam+' Team</span>':''}
         <div style="display:flex;gap:6px;margin-top:6px">
           <div style="flex:1;background:var(--surface2);border-radius:7px;padding:5px 8px;text-align:center">
             <div style="font-family:'DM Mono',monospace;font-size:15px;font-weight:600;color:${color}">${m.monthlyCount||0}</div>
@@ -3871,6 +4154,24 @@ function renderTeamList(){
           <button class="icon-btn del" onclick="deleteAdmit('${m.id}')">✕ Remove</button>
         </div>
       </div>`;
+    } else if(m._kind==='staff'){
+      // Ancillary staff card
+      const roleCfg = ROLES_CONFIG[m.role]||ROLES_CONFIG['OTHER'];
+      return `<div class="card">
+        <div class="card-top" style="${m.employmentStatus==='inactive'||m.employmentStatus==='loa'?'opacity:0.5':''}">
+          <div class="card-dot" style="background:${roleCfg.color}"></div>
+          <div class="card-name">${m.name}</div>
+          <span style="font-size:9px;background:${roleCfg.badgeBg};color:#fff;border-radius:4px;padding:2px 6px;font-weight:700;flex-shrink:0">${roleCfg.badge}</span>
+        </div>
+        ${m.credentials?'<div style="font-size:10px;color:var(--muted);margin-top:3px;font-style:italic">'+m.credentials+'</div>':''}
+        ${m.phone?'<div style="font-size:11px;color:var(--text);margin-top:2px">📞 <a href="tel:'+m.phone+'" style="color:inherit;text-decoration:none">'+m.phone+'</a></div>':''}
+        ${m.idtTeam?'<span style="font-size:9px;padding:1px 6px;border-radius:10px;font-weight:600;'+(m.idtTeam==='Purple'?'background:rgba(155,137,196,.2);color:#6B3FA0':'background:rgba(59,130,246,.15);color:#3b82f6')+'">'+m.idtTeam+' Team</span>':''}
+        <div style="font-size:10px;color:${OFFICE_ZONES[m.zoneKey]?.color||'var(--muted)'};margin-top:2px">${OFFICE_ZONES[m.zoneKey]?.label||m.zoneKey}</div>
+        <div class="card-actions">
+          <button class="icon-btn" onclick="openEditStaff('${m.id}')">✎ Edit</button>
+          <button class="icon-btn del" onclick="deleteStaff('${m.id}')">✕ Remove</button>
+        </div>
+      </div>`;
     } else {
       // Nurse card
       const ptCount=patients.filter(p=>p.nurseId===m.id).length;
@@ -3885,6 +4186,7 @@ function renderTeamList(){
         </div>
         ${m.credentials?'<div style="font-size:10px;color:var(--muted);margin-top:3px;font-style:italic">'+m.credentials+'</div>':''}
         ${m.phone?'<div style="font-size:11px;color:var(--text);margin-top:2px">📞 <a href="tel:'+m.phone+'" style="color:inherit;text-decoration:none" onclick="event.stopPropagation()">'+m.phone+'</a></div>':''}
+        ${m.idtTeam?'<span style="font-size:9px;padding:1px 6px;border-radius:10px;font-weight:600;'+(m.idtTeam==='Purple'?'background:rgba(155,137,196,.2);color:#6B3FA0':'background:rgba(59,130,246,.15);color:#3b82f6')+'">'+m.idtTeam+' Team</span>':''}
         ${(m.admitMonthly||m.admitYTD)?'<div style="font-size:10px;color:#60a5fa;margin-top:2px">📋 '+(m.admitMonthly||0)+' this month | '+(m.admitYTD||0)+' YTD</div>':''}
         <div style="font-size:10px;color:${OFFICE_ZONES[m.zoneKey]?.color||'var(--muted)'};margin-top:2px">${OFFICE_ZONES[m.zoneKey]?.label||m.zoneKey}</div>
         ${allAreas.length?'<div class="tag-pills">'+allAreas.slice(0,5).map(a=>'<span class="tpill">'+a+'</span>').join('')+(allAreas.length>5?'<span class="tpill">+'+(allAreas.length-5)+' more</span>':'')+'</div>':''}
