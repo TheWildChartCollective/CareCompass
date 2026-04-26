@@ -450,6 +450,49 @@ header{display:flex;align-items:center;justify-content:space-between;padding:9px
   </div>
 </div>
 
+<!-- EDIT ADMIT MODAL -->
+<div class="modal-overlay" id="editAdmitModal">
+  <div class="modal">
+    <h3>✎ Edit Staff</h3>
+    <div class="add-form">
+      <div class="field-label" style="margin-top:0">Name:</div>
+      <input type="text" id="eaName" placeholder="Full name"/>
+      <div class="field-label">Role:</div>
+      <select id="eaRole">
+        <option value="ADMIT_FT">Admit RN (FT)</option>
+        <option value="ADMIT_PRN">Admit RN (PRN)</option>
+        <option value="ONCALL">🌙 On-Call RN</option>
+      </select>
+      <div class="field-label">Status:</div>
+      <select id="eaStatus">
+        <option value="active">✅ Active</option>
+        <option value="parttime">🕐 Part Time</option>
+        <option value="prn">📋 PRN</option>
+        <option value="loa">⏸️ Leave of Absence</option>
+        <option value="inactive">🌿 Alumni</option>
+      </select>
+      <div class="field-label">Office Zone:</div>
+      <select id="eaZone">
+        <option value="atlanta">Atlanta</option>
+        <option value="eastga" selected>East Georgia</option>
+        <option value="augusta">Augusta</option>
+      </select>
+      <div class="field-label">Credentials / Title:</div>
+      <input type="text" id="eaCredentials" placeholder="e.g. BSN, RN, CHPN"/>
+      <div class="field-label">Address (for map pin):</div>
+      <div style="position:relative">
+        <input type="text" id="eaAddr" placeholder="Address or city/zip…" autocomplete="off" oninput="searchEaAddr()"/>
+        <div id="eaAddrSuggestions" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:0 0 7px 7px;z-index:300;max-height:150px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.15)"></div>
+      </div>
+      <div id="eaAddrStatus" style="font-size:10px;color:var(--muted);margin-top:2px;min-height:14px"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal('editAdmitModal')">Cancel</button>
+      <button class="btn" onclick="saveEditAdmit()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
 <!-- FACILITY MODAL -->
 <div class="modal-overlay" id="facilityModal">
   <div class="modal">
@@ -737,7 +780,7 @@ function save() {
     masterFacilities: masterFacilities.map(f=>({id:f.id,name:f.name,address:f.address,lat:f.lat,lng:f.lng,placeId:f.placeId,nurseIds:f.nurseIds,census:f.census||0})),
     nurses:      nurses.map(n=>({id:n.id,name:n.name,color:n.color,nurseType:n.nurseType||'RN',credentials:n.credentials||'',employmentStatus:n.employmentStatus||'active',zoneKey:n.zoneKey,counties:n.counties,cities:n.cities,facilities:n.facilities||[],path:n.path,homeAddress:n.homeAddress||'',homeLat:n.homeLat||null,homeLng:n.homeLng||null,distanceThreshold:n.distanceThreshold||null})),
     globalDistanceThreshold,
-    admitNurses: admitNurses.map(a=>({id:a.id,name:a.name,admitType:a.admitType||'FullTime',zoneKey:a.zoneKey,lat:a.lat,lng:a.lng,address:a.address,monthlyCount:a.monthlyCount||0,ytdCount:a.ytdCount||0,evalCount:a.evalCount||0,lastResetMonth:a.lastResetMonth,lastResetYear:a.lastResetYear})),
+    admitNurses: admitNurses.map(a=>({id:a.id,name:a.name,admitType:a.admitType||'FullTime',employmentStatus:a.employmentStatus||'active',credentials:a.credentials||'',zoneKey:a.zoneKey,lat:a.lat,lng:a.lng,address:a.address,monthlyCount:a.monthlyCount||0,ytdCount:a.ytdCount||0,evalCount:a.evalCount||0,lastResetMonth:a.lastResetMonth,lastResetYear:a.lastResetYear})),
     staff:       staff.map(s=>({id:s.id,name:s.name,role:s.role,zoneKey:s.zoneKey,nurseIds:s.nurseIds,lat:s.lat,lng:s.lng,address:s.address})),
     patients:    patients.map(p=>({id:p.id,name:p.name,address:p.address,lat:p.lat,lng:p.lng,nurseId:p.nurseId,admitId:p.admitId,admitterType:p.admitterType||null,admitDate:p.admitDate||null,locType:p.locType,facilityName:p.facilityName,facilityId:p.facilityId||null,roomNote:p.roomNote||null,status:p.status||'active',isReadmit:p.isReadmit||false,hospitalId:p.hospitalId||null})),
   }));
@@ -2658,6 +2701,128 @@ function updateNurseEmployment(id, status){
   showToast(n.name+' → '+(s?s.icon+' '+s.label:status),'ok');
 }
 
+let _editingAdmitId = null;
+let _eaPreGeoLat = null, _eaPreGeoLng = null, _eaPreGeoAddr = null;
+
+function openEditAdmit(id){
+  const a = admitNurses.find(x=>x.id===id); if(!a) return;
+  _editingAdmitId = id;
+  _eaPreGeoLat = a.lat||null;
+  _eaPreGeoLng = a.lng||null;
+  _eaPreGeoAddr = a.address||null;
+
+  document.getElementById('eaName').value = a.name||'';
+  // Map old admitType to new role keys
+  const roleMap = {'FullTime':'ADMIT_FT','PRN':'ADMIT_PRN','OnCall':'ONCALL','ADMIT_FT':'ADMIT_FT','ADMIT_PRN':'ADMIT_PRN','ONCALL':'ONCALL'};
+  document.getElementById('eaRole').value = roleMap[a.admitType]||'ADMIT_FT';
+  document.getElementById('eaStatus').value = a.employmentStatus||'active';
+  document.getElementById('eaZone').value = a.zoneKey||'eastga';
+  document.getElementById('eaCredentials').value = a.credentials||'';
+  document.getElementById('eaAddr').value = a.address||'';
+  document.getElementById('eaAddrStatus').textContent = a.address ? '✓ '+a.address : '';
+  openModal('editAdmitModal');
+  setTimeout(initEaAddrSearch, 100);
+}
+
+function initEaAddrSearch(){
+  if(!mapsLoaded||!google.maps.places) return;
+  const input = document.getElementById('eaAddr');
+  if(!input||input._eaInit) return;
+  input._eaInit = true;
+}
+
+function searchEaAddr(){
+  if(!mapsLoaded||!google.maps.places) return;
+  const input = document.getElementById('eaAddr');
+  const suggestBox = document.getElementById('eaAddrSuggestions');
+  const val = input.value.trim();
+  if(!val){ suggestBox.style.display='none'; return; }
+  const svc = new google.maps.places.AutocompleteService();
+  svc.getPlacePredictions({
+    input: val, componentRestrictions:{country:'us'},
+    types:['address','(cities)'],
+  }, (predictions, status)=>{
+    if(status!=='OK'||!predictions){ suggestBox.style.display='none'; return; }
+    suggestBox.innerHTML = predictions.slice(0,5).map(p=>
+      `<div data-place-id="${p.place_id}" data-desc="${p.description.replace(/"/g,'&quot;')}"
+        style="padding:8px 10px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border);transition:background .15s"
+        onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+        <div style="font-weight:500">${p.structured_formatting?.main_text||p.description}</div>
+        <div style="font-size:10px;color:var(--muted)">${p.structured_formatting?.secondary_text||''}</div>
+      </div>`
+    ).join('');
+    suggestBox.style.display = 'block';
+    suggestBox.querySelectorAll('div[data-place-id]').forEach(el=>{
+      el.addEventListener('click',()=>{
+        input.value = el.dataset.desc;
+        suggestBox.style.display='none';
+        document.getElementById('eaAddrStatus').textContent='Geocoding…';
+        geocoder.geocode({placeId:el.dataset.placeId},(results,status)=>{
+          if(status==='OK'&&results[0]){
+            _eaPreGeoLat = results[0].geometry.location.lat();
+            _eaPreGeoLng = results[0].geometry.location.lng();
+            _eaPreGeoAddr = results[0].formatted_address;
+            input.value = _eaPreGeoAddr;
+            document.getElementById('eaAddrStatus').textContent='✓ '+_eaPreGeoAddr;
+            document.getElementById('eaAddrStatus').style.color='var(--accent2)';
+          }
+        });
+      });
+    });
+  });
+}
+
+function saveEditAdmit(){
+  const a = admitNurses.find(x=>x.id===_editingAdmitId); if(!a) return;
+  const newName    = document.getElementById('eaName').value.trim();
+  const newRole    = document.getElementById('eaRole').value;
+  const newStatus  = document.getElementById('eaStatus').value;
+  const newZone    = document.getElementById('eaZone').value;
+  const addrInput  = document.getElementById('eaAddr').value.trim();
+
+  const newCreds = document.getElementById('eaCredentials').value.trim();
+  if(!newName){ showToast('Name is required','err'); return; }
+
+  // Update fields
+  a.name = newName;
+  a.credentials = newCreds;
+  a.employmentStatus = newStatus;
+  a.zoneKey = newZone;
+
+  // Update role/type
+  const admitTypeMap = {'ADMIT_FT':'FullTime','ADMIT_PRN':'PRN','ONCALL':'OnCall'};
+  const newAdmitType = admitTypeMap[newRole]||'FullTime';
+  if(a.admitType !== newAdmitType){
+    a.admitType = newAdmitType;
+    if(a.marker){ a.marker.setMap(null); a.marker=null; }
+  }
+
+  // Update address/location
+  if(_eaPreGeoLat && _eaPreGeoLng){
+    a.lat = _eaPreGeoLat;
+    a.lng = _eaPreGeoLng;
+    a.address = _eaPreGeoAddr||addrInput;
+    if(a.marker) a.marker.setMap(null);
+    a.marker = placeStaffPin(a.lat,a.lng,a.name,'Admit',getAdmitColor(a.admitType));
+  } else if(addrInput && addrInput !== a.address){
+    a.address = addrInput;
+    // Geocode
+    geocoder.geocode({address:addrInput+', Georgia, USA'},(results,status)=>{
+      if(status==='OK'&&results[0]){
+        a.lat = results[0].geometry.location.lat();
+        a.lng = results[0].geometry.location.lng();
+        if(a.marker) a.marker.setMap(null);
+        a.marker = placeStaffPin(a.lat,a.lng,a.name,'Admit',getAdmitColor(a.admitType));
+        applyViewVisibility();
+      }
+    });
+  }
+
+  closeModal('editAdmitModal');
+  renderTeamList(); save(); applyViewVisibility();
+  showToast(newName+' updated ✓','ok');
+}
+
 function updateAdmitEmployment(id, status){
   const a = admitNurses.find(x=>x.id===id); if(!a) return;
   a.employmentStatus = status;
@@ -2703,6 +2868,7 @@ function saveAdmit(){
     const obj={id:'a_'+Date.now(),name:pendingItem.name,
       admitType:pendingItem.admitType||'FullTime',
       employmentStatus:'active',
+      credentials:'',
       zoneKey:pendingItem.zoneKey,lat,lng,address:fmtAddr||addr,marker:null,
       monthlyCount:0, ytdCount:0, evalCount:0,
       lastResetMonth: now.getMonth(), lastResetYear: now.getFullYear(),
@@ -3113,6 +3279,7 @@ function renderTeamList(){
           ${m.employmentStatus==='inactive'?'<span style="font-size:9px;color:var(--muted);font-style:italic">🌿 Alumni</span>':''}
         </div>
         <div style="font-size:10px;color:${OFFICE_ZONES[m.zoneKey]?.color||'var(--muted)'};margin-top:2px">${OFFICE_ZONES[m.zoneKey]?.label||m.zoneKey}</div>
+        ${m.credentials?'<div style="font-size:10px;color:var(--muted);margin-top:2px;font-style:italic">'+m.credentials+'</div>':''}
         <div style="display:flex;gap:6px;margin-top:6px">
           <div style="flex:1;background:var(--surface2);border-radius:7px;padding:5px 8px;text-align:center">
             <div style="font-family:'DM Mono',monospace;font-size:15px;font-weight:600;color:${color}">${m.monthlyCount||0}</div>
@@ -3153,6 +3320,7 @@ function renderTeamList(){
             title="Status">
             ${Object.entries(EMPLOYMENT_STATUS).map(([k,v])=>`<option value="${k}" ${(m.employmentStatus||'active')===k?'selected':''}>${v.icon} ${v.label}</option>`).join('')}
           </select>
+          <button class="icon-btn" onclick="openEditAdmit('${m.id}')" style="padding:3px 6px;font-size:11px">✎ Edit</button>
           <button class="icon-btn del" onclick="deleteAdmit('${m.id}')" style="padding:3px 6px;font-size:11px">✕</button>
         </div>
       </div>`;
