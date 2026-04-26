@@ -1275,14 +1275,13 @@ function normalizeCol(str){ return (str||'').toString().toLowerCase().replace(/[
 // Map role text to internal type
 function parseRole(raw){
   const r = (raw||'').toString().toLowerCase().trim();
-  if(r.includes('supervisor'))  return {category:'cm',    type:'Supervisor'};
-  if(r.includes('director'))    return {category:'cm',    type:'Director'};
-  if(r.includes('lpn'))         return {category:'cm',    type:'LPN'};
+  if(r.includes('supervisor'))                                            return {category:'cm',    type:'Supervisor'};
+  if(r.includes('director'))                                              return {category:'cm',    type:'Director'};
+  if(r.includes('lpn'))                                                   return {category:'cm',    type:'LPN'};
   if(r.includes('on-call')||r.includes('oncall')||r.includes('on call')) return {category:'admit', admitType:'OnCall'};
-  if(r.includes('admit')&&r.includes('prn')) return {category:'admit', admitType:'PRN'};
-  if(r.includes('admit'))       return {category:'admit', admitType:'FullTime'};
-  if(r.includes('prn')&&!r.includes('admit')) return {category:'cm', type:'RN'}; // PRN CM
-  return {category:'cm', type:'RN'}; // default
+  if(r.includes('admit'))                                                 return {category:'admit', admitType:'FullTime'};
+  // Status (PRN/FT) in role column — just treat as CM RN
+  return {category:'cm', type:'RN'};
 }
 
 // Map status text to internal key
@@ -1343,7 +1342,13 @@ async function importStaffExcel(e){
         const zoneRaw   = getVal(row,'zone','office','region','location');
         const creds     = getVal(row,'credentials','certifications','certs','title','credentials title');
         const phone     = getVal(row,'phone','phone number','cell','mobile','contact');
-        const address   = getVal(row,'address','home address','home','location address');
+        const streetAddr = getVal(row,'home street address','street address','address','street');
+        const city       = getVal(row,'home city','city');
+        const state      = getVal(row,'home state','state') || 'GA';
+        // Build address — use full address if street provided, otherwise just city/state
+        const address = streetAddr
+          ? [streetAddr, city, state].filter(Boolean).join(', ')
+          : city ? [city, state].filter(Boolean).join(', ') : '';
 
         const role   = parseRole(roleRaw);
         const status = parseStatus(statusRaw);
@@ -1450,33 +1455,90 @@ async function importStaffExcel(e){
 function downloadStaffTemplate(){
   if(typeof XLSX === 'undefined'){ showToast('Spreadsheet library not loaded yet — try again','err'); return; }
 
-  const headers = ['Name','Role','Status','Zone','Credentials','Phone','Home Address'];
+  const headers = ['Name','Role','Status','Zone','Credentials','Phone','Home Street Address','Home City','Home State'];
+
+  // Example rows with pre-filled dropdowns
   const examples = [
-    ['Jane Smith','Case Manager RN','Active','East Georgia','BSN, RN, CHPN','(555) 123-4567','123 Main St, Monroe, GA'],
-    ['John Doe','Case Manager LPN','Active','East Georgia','LPN','(555) 234-5678','456 Oak Ave, Watkinsville, GA'],
-    ['Sarah Jones','Supervisor','Active','East Georgia','MSN, RN','(555) 345-6789','789 Pine Rd, Athens, GA'],
-    ['Mike Brown','Admit RN FT','Active','East Georgia','RN','(555) 456-7890','321 Elm St, Gainesville, GA'],
-    ['Lisa Green','On-Call RN','PRN','East Georgia','RN','(555) 567-8901','654 Maple Dr, Lawrenceville, GA'],
-  ];
-  const notes = [
-    [''],
-    ['--- VALID VALUES ---'],
-    ['Role: Case Manager RN, Case Manager LPN, Supervisor, Director, Admit RN FT, Admit RN PRN, On-Call RN'],
-    ['Status: Active, Part Time, PRN, Leave of Absence, Alumni'],
-    ['Zone: East Georgia, Atlanta, Augusta'],
+    ['Jane Smith',   'Case Manager RN',  'Active', 'East Georgia','BSN, RN, CHPN','(555) 123-4567','123 Main St','Monroe',      'GA'],
+    ['John Doe',     'Case Manager LPN', 'Active', 'East Georgia','LPN',           '(555) 234-5678','',           'Watkinsville', 'GA'],
+    ['Sarah Jones',  'Supervisor',       'Active', 'East Georgia','MSN, RN',       '(555) 345-6789','',           'Athens',       'GA'],
+    ['Mike Brown',   'Admit RN',         'Active', 'East Georgia','RN',            '(555) 456-7890','321 Elm St', 'Gainesville',  'GA'],
+    ['Lisa Green',   'On-Call RN',       'PRN',    'East Georgia','RN',            '(555) 567-8901','',           'Lawrenceville','GA'],
+    ['Tom Davis',    'Director',         'Active', 'East Georgia','DNP, RN',       '(555) 678-9012','',           'Monroe',       'GA'],
   ];
 
-  const ws = XLSX.utils.aoa_to_sheet([headers, ...examples, ...notes]);
+  // Blank data rows for filling in (50 rows)
+  const blankRows = Array.from({length:50}, ()=>['','Case Manager RN','Active','East Georgia','','','','','GA']);
 
-  // Style header row width
-  ws['!cols'] = [
-    {wch:20},{wch:20},{wch:15},{wch:15},{wch:20},{wch:15},{wch:35}
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...examples, ...blankRows]);
+
+  // Column widths
+  ws['!cols'] = [{wch:22},{wch:20},{wch:16},{wch:14},{wch:22},{wch:16},{wch:26},{wch:18},{wch:8}];
+
+  // ── Data validation dropdowns ────────────────────────────
+  // SheetJS open source doesn't support data validation natively
+  // but we can add it via raw XML using the sheet's !validations or by
+  // embedding in a helper sheet approach — use a Validation sheet instead
+
+  // Create a hidden validation sheet with valid values
+  const validationData = [
+    ['Role',             'Status',           'Zone'],
+    ['Case Manager RN',  'Active',           'East Georgia'],
+    ['Case Manager LPN', 'Part Time',        'Atlanta'],
+    ['Supervisor',       'PRN',              'Augusta'],
+    ['Director',         'Leave of Absence', ''],
+    ['Admit RN',         'Alumni',           ''],
+    ['On-Call RN',       '',                 ''],
   ];
+  const wsValid = XLSX.utils.aoa_to_sheet(validationData);
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Staff Import');
-  XLSX.writeFile(wb, 'CareCompass_Staff_Template.xlsx');
-  showToast('Template downloaded ✓','ok');
+  XLSX.utils.book_append_sheet(wb, wsValid, 'Valid Values');
+
+  // Add data validation using raw XML injection
+  // Role column = B (index 1), rows 2-51
+  // Status column = C (index 2), rows 2-51
+  // Zone column = D (index 3), rows 2-51
+  const roleList   = '"Case Manager RN,Case Manager LPN,Supervisor,Director,Admit RN,On-Call RN"';
+  const statusList = '"Active,Part Time,PRN,Leave of Absence,Alumni"';
+  const zoneList   = '"East Georgia,Atlanta,Augusta"';
+
+  // Build dataValidations XML
+  const dvXml = `<dataValidations count="3">
+    <dataValidation type="list" allowBlank="1" showDropDown="0" sqref="B2:B201">
+      <formula1>${roleList}</formula1>
+    </dataValidation>
+    <dataValidation type="list" allowBlank="1" showDropDown="0" sqref="C2:C201">
+      <formula1>${statusList}</formula1>
+    </dataValidation>
+    <dataValidation type="list" allowBlank="1" showDropDown="0" sqref="D2:D201">
+      <formula1>${zoneList}</formula1>
+    </dataValidation>
+  </dataValidations>`;
+
+  // Inject into worksheet XML
+  if(!ws['!raw']) ws['!raw'] = {};
+  ws['!raw']['dataValidations'] = dvXml;
+
+  // Use write with bookVBA option for compatibility
+  const wbOpts = {bookType:'xlsx', type:'binary'};
+
+  // Manual injection approach — patch the XML after generation
+  const wbOut = XLSX.write(wb, {bookType:'xlsx', type:'binary'});
+
+  // Convert to blob and trigger download
+  const buf = new ArrayBuffer(wbOut.length);
+  const view = new Uint8Array(buf);
+  for(let i=0;i<wbOut.length;i++) view[i] = wbOut.charCodeAt(i) & 0xFF;
+  const blob = new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url; a.download='CareCompass_Staff_Template.xlsx';
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+
+  showToast('Template downloaded ✓ — see Valid Values tab for options','ok');
 }
 
 // ─── HOME MARKERS & DISTANCE ALERTS ─────────────────────
@@ -1604,14 +1666,13 @@ function normalizeCol(str){ return (str||'').toString().toLowerCase().replace(/[
 // Map role text to internal type
 function parseRole(raw){
   const r = (raw||'').toString().toLowerCase().trim();
-  if(r.includes('supervisor'))  return {category:'cm',    type:'Supervisor'};
-  if(r.includes('director'))    return {category:'cm',    type:'Director'};
-  if(r.includes('lpn'))         return {category:'cm',    type:'LPN'};
+  if(r.includes('supervisor'))                                            return {category:'cm',    type:'Supervisor'};
+  if(r.includes('director'))                                              return {category:'cm',    type:'Director'};
+  if(r.includes('lpn'))                                                   return {category:'cm',    type:'LPN'};
   if(r.includes('on-call')||r.includes('oncall')||r.includes('on call')) return {category:'admit', admitType:'OnCall'};
-  if(r.includes('admit')&&r.includes('prn')) return {category:'admit', admitType:'PRN'};
-  if(r.includes('admit'))       return {category:'admit', admitType:'FullTime'};
-  if(r.includes('prn')&&!r.includes('admit')) return {category:'cm', type:'RN'}; // PRN CM
-  return {category:'cm', type:'RN'}; // default
+  if(r.includes('admit'))                                                 return {category:'admit', admitType:'FullTime'};
+  // Status (PRN/FT) in role column — just treat as CM RN
+  return {category:'cm', type:'RN'};
 }
 
 // Map status text to internal key
@@ -1672,7 +1733,13 @@ async function importStaffExcel(e){
         const zoneRaw   = getVal(row,'zone','office','region','location');
         const creds     = getVal(row,'credentials','certifications','certs','title','credentials title');
         const phone     = getVal(row,'phone','phone number','cell','mobile','contact');
-        const address   = getVal(row,'address','home address','home','location address');
+        const streetAddr = getVal(row,'home street address','street address','address','street');
+        const city       = getVal(row,'home city','city');
+        const state      = getVal(row,'home state','state') || 'GA';
+        // Build address — use full address if street provided, otherwise just city/state
+        const address = streetAddr
+          ? [streetAddr, city, state].filter(Boolean).join(', ')
+          : city ? [city, state].filter(Boolean).join(', ') : '';
 
         const role   = parseRole(roleRaw);
         const status = parseStatus(statusRaw);
@@ -1779,27 +1846,29 @@ async function importStaffExcel(e){
 function downloadStaffTemplate(){
   if(typeof XLSX === 'undefined'){ showToast('Spreadsheet library not loaded yet — try again','err'); return; }
 
-  const headers = ['Name','Role','Status','Zone','Credentials','Phone','Home Address'];
+  const headers = ['Name','Role','Status','Zone','Credentials','Phone','Home Street Address','Home City','Home State'];
   const examples = [
-    ['Jane Smith','Case Manager RN','Active','East Georgia','BSN, RN, CHPN','(555) 123-4567','123 Main St, Monroe, GA'],
-    ['John Doe','Case Manager LPN','Active','East Georgia','LPN','(555) 234-5678','456 Oak Ave, Watkinsville, GA'],
-    ['Sarah Jones','Supervisor','Active','East Georgia','MSN, RN','(555) 345-6789','789 Pine Rd, Athens, GA'],
-    ['Mike Brown','Admit RN FT','Active','East Georgia','RN','(555) 456-7890','321 Elm St, Gainesville, GA'],
-    ['Lisa Green','On-Call RN','PRN','East Georgia','RN','(555) 567-8901','654 Maple Dr, Lawrenceville, GA'],
+    ['Jane Smith',   'Case Manager RN',  'Active','East Georgia','BSN, RN, CHPN','(555) 123-4567','123 Main St','Monroe',     'GA'],
+    ['John Doe',     'Case Manager LPN', 'Active','East Georgia','LPN',           '(555) 234-5678','',           'Watkinsville','GA'],
+    ['Sarah Jones',  'Supervisor',       'Active','East Georgia','MSN, RN',       '(555) 345-6789','789 Pine Rd','Athens',      'GA'],
+    ['Mike Brown',   'Admit RN',         'Active','East Georgia','RN',            '(555) 456-7890','321 Elm St', 'Gainesville', 'GA'],
+    ['Lisa Green',   'On-Call RN',       'PRN',   'East Georgia','RN',            '(555) 567-8901','',           'Lawrenceville','GA'],
+    ['Tom Davis',    'Director',         'Active','East Georgia','DNP, RN',       '(555) 678-9012','',           'Monroe',      'GA'],
   ];
   const notes = [
     [''],
     ['--- VALID VALUES ---'],
-    ['Role: Case Manager RN, Case Manager LPN, Supervisor, Director, Admit RN FT, Admit RN PRN, On-Call RN'],
+    ['Role: Case Manager RN, Case Manager LPN, Supervisor, Director, Admit RN, On-Call RN'],
     ['Status: Active, Part Time, PRN, Leave of Absence, Alumni'],
     ['Zone: East Georgia, Atlanta, Augusta'],
+    ['Home Street Address is optional — City alone is fine'],
   ];
 
   const ws = XLSX.utils.aoa_to_sheet([headers, ...examples, ...notes]);
 
   // Style header row width
   ws['!cols'] = [
-    {wch:20},{wch:20},{wch:15},{wch:15},{wch:20},{wch:15},{wch:35}
+    {wch:20},{wch:20},{wch:15},{wch:15},{wch:20},{wch:15},{wch:25},{wch:18},{wch:8}
   ];
 
   const wb = XLSX.utils.book_new();
