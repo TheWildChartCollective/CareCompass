@@ -180,6 +180,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:9px
 .toast.ok{border-color:#3F5A45;color:#3F5A45;}
 .toast.err{border-color:var(--danger);color:var(--danger);}
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -208,6 +209,8 @@ header{display:flex;align-items:center;justify-content:space-between;padding:9px
     </div>
     <button class="btn secondary" onclick="exportData()">⬇ Export</button>
     <label class="btn secondary" style="cursor:pointer">⬆ Import<input type="file" accept=".json" onchange="importData(event)" style="display:none"></label>
+    <label class="btn secondary" style="cursor:pointer;background:rgba(155,137,196,.15);border-color:#9B89C4;color:#6B3FA0">👥 Import Staff<input type="file" accept=".xlsx,.xls" onchange="importStaffExcel(event)" style="display:none"></label>
+    <button class="btn secondary" onclick="downloadStaffTemplate()" style="background:rgba(155,137,196,.08);border-color:#9B89C4;color:#6B3FA0" title="Download Excel template">📋 Template</button>
   </div>
 </header>
 
@@ -1258,6 +1261,218 @@ function getTabZoneColor(zoneKey) {
   }
 }
 
+// ─── STAFF EXCEL IMPORT ──────────────────────────────────
+
+// Column name normalization
+function normalizeCol(str){ return (str||'').toString().toLowerCase().replace(/[^a-z0-9]/g,''); }
+
+// Map role text to internal type
+function parseRole(raw){
+  const r = (raw||'').toString().toLowerCase().trim();
+  if(r.includes('supervisor'))  return {category:'cm',    type:'Supervisor'};
+  if(r.includes('director'))    return {category:'cm',    type:'Director'};
+  if(r.includes('lpn'))         return {category:'cm',    type:'LPN'};
+  if(r.includes('on-call')||r.includes('oncall')||r.includes('on call')) return {category:'admit', admitType:'OnCall'};
+  if(r.includes('admit')&&r.includes('prn')) return {category:'admit', admitType:'PRN'};
+  if(r.includes('admit'))       return {category:'admit', admitType:'FullTime'};
+  if(r.includes('prn')&&!r.includes('admit')) return {category:'cm', type:'RN'}; // PRN CM
+  return {category:'cm', type:'RN'}; // default
+}
+
+// Map status text to internal key
+function parseStatus(raw){
+  const s = (raw||'').toString().toLowerCase().trim();
+  if(s.includes('alumni')||s.includes('inactive')||s.includes('former')) return 'inactive';
+  if(s.includes('leave')||s.includes('loa'))    return 'loa';
+  if(s.includes('part')||s.includes('pt'))      return 'parttime';
+  if(s.includes('prn'))                          return 'prn';
+  return 'active';
+}
+
+// Map zone text to internal key
+function parseZone(raw){
+  const z = (raw||'').toString().toLowerCase().trim();
+  if(z.includes('atlanta')||z.includes('atl'))  return 'atlanta';
+  if(z.includes('augusta')||z.includes('aug'))  return 'augusta';
+  return 'eastga'; // default
+}
+
+async function importStaffExcel(e){
+  const file = e.target.files[0]; if(!file) return;
+  if(typeof XLSX === 'undefined'){ showToast('Spreadsheet library not loaded yet — try again','err'); return; }
+
+  const reader = new FileReader();
+  reader.onload = async (ev) => {
+    try {
+      const wb  = XLSX.read(ev.target.result, {type:'binary'});
+      const ws  = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, {defval:''});
+
+      if(!rows.length){ showToast('No data found in spreadsheet','err'); return; }
+
+      // Build column map from first row keys
+      const sampleKeys = Object.keys(rows[0]);
+      const colMap = {};
+      sampleKeys.forEach(k=>{ colMap[normalizeCol(k)] = k; });
+
+      const getVal = (row, ...aliases) => {
+        for(const a of aliases){
+          const norm = normalizeCol(a);
+          for(const [k,orig] of Object.entries(colMap)){
+            if(k===norm||k.includes(norm)||norm.includes(k)) return (row[orig]||'').toString().trim();
+          }
+        }
+        return '';
+      };
+
+      let added=0, updated=0, skipped=0;
+      const toGeocode = [];
+
+      for(const row of rows){
+        const name = getVal(row,'name','full name','fullname');
+        if(!name) continue;
+
+        const roleRaw   = getVal(row,'role','type','position','title');
+        const statusRaw = getVal(row,'status','employment','employment status');
+        const zoneRaw   = getVal(row,'zone','office','region','location');
+        const creds     = getVal(row,'credentials','certifications','certs','title','credentials title');
+        const phone     = getVal(row,'phone','phone number','cell','mobile','contact');
+        const address   = getVal(row,'address','home address','home','location address');
+
+        const role   = parseRole(roleRaw);
+        const status = parseStatus(statusRaw);
+        const zone   = parseZone(zoneRaw);
+
+        if(role.category === 'admit'){
+          // Find existing or create new admit nurse
+          const existing = admitNurses.find(a=>a.name.toLowerCase()===name.toLowerCase());
+          if(existing){
+            existing.admitType        = role.admitType||existing.admitType;
+            existing.employmentStatus = status;
+            existing.credentials      = creds||existing.credentials;
+            existing.phone            = phone||existing.phone;
+            existing.zoneKey          = zone;
+            if(address && address!==existing.address) toGeocode.push({type:'admit',id:existing.id,address});
+            updated++;
+          } else {
+            const now = new Date();
+            const obj = {
+              id:'a_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),
+              name, admitType:role.admitType||'FullTime',
+              employmentStatus:status, credentials:creds, phone,
+              zoneKey:zone, address, lat:null, lng:null, marker:null,
+              monthlyCount:0, ytdCount:0, evalCount:0,
+              lastResetMonth:now.getMonth(), lastResetYear:now.getFullYear(),
+            };
+            if(address) toGeocode.push({type:'admit',id:obj.id,address});
+            admitNurses.push(obj);
+            added++;
+          }
+        } else {
+          // Case manager / supervisor / director
+          const existing = nurses.find(n=>n.name.toLowerCase()===name.toLowerCase());
+          if(existing){
+            existing.nurseType        = role.type||existing.nurseType;
+            existing.color            = getNurseColor(existing.nurseType);
+            existing.employmentStatus = status;
+            existing.credentials      = creds||existing.credentials;
+            existing.phone            = phone||existing.phone;
+            existing.zoneKey          = zone;
+            if(address && address!==existing.homeAddress) toGeocode.push({type:'nurse',id:existing.id,address});
+            updated++;
+          } else {
+            const obj = {
+              id:'n_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),
+              name, color:getNurseColor(role.type||'RN'),
+              nurseType:role.type||'RN', credentials:creds, phone,
+              employmentStatus:status, zoneKey:zone,
+              counties:[], cities:[], facilities:[],
+              homeAddress:address, homeLat:null, homeLng:null, homeMarker:null,
+              distanceThreshold:null, polygon:null, path:null, facilityMarkers:[],
+            };
+            if(address) toGeocode.push({type:'nurse',id:obj.id,address});
+            nurses.push(obj);
+            added++;
+          }
+        }
+      }
+
+      // Geocode addresses sequentially
+      if(toGeocode.length && mapsLoaded){
+        showToast('Geocoding '+toGeocode.length+' addresses…','');
+        for(const item of toGeocode){
+          await new Promise(resolve=>{
+            geocoder.geocode({address:item.address+', Georgia, USA'},(results,status)=>{
+              if(status==='OK'&&results[0]){
+                const loc=results[0].geometry.location;
+                if(item.type==='nurse'){
+                  const n=nurses.find(x=>x.id===item.id);
+                  if(n){
+                    n.homeLat=loc.lat(); n.homeLng=loc.lng();
+                    n.homeAddress=results[0].formatted_address;
+                    if(n.homeMarker) n.homeMarker.setMap(null);
+                    n.homeMarker=placeHomeMarker(n.homeLat,n.homeLng,n);
+                  }
+                } else {
+                  const a=admitNurses.find(x=>x.id===item.id);
+                  if(a){
+                    a.lat=loc.lat(); a.lng=loc.lng();
+                    a.address=results[0].formatted_address;
+                    if(a.marker) a.marker.setMap(null);
+                    a.marker=placeStaffPin(a.lat,a.lng,a.name,'Admit',getAdmitColor(a.admitType));
+                  }
+                }
+              }
+              setTimeout(resolve, 200); // small delay between geocode calls
+            });
+          });
+        }
+      }
+
+      renderAll(); save(); applyViewVisibility();
+      showToast('Import complete: '+added+' added, '+updated+' updated'+(skipped?' ('+skipped+' skipped)':''),'ok');
+      e.target.value=''; // reset file input
+
+    } catch(err){
+      console.error('Staff import error:', err);
+      showToast('Import failed — check your file format','err');
+    }
+  };
+  reader.readAsBinaryString(file);
+}
+
+function downloadStaffTemplate(){
+  if(typeof XLSX === 'undefined'){ showToast('Spreadsheet library not loaded yet — try again','err'); return; }
+
+  const headers = ['Name','Role','Status','Zone','Credentials','Phone','Home Address'];
+  const examples = [
+    ['Jane Smith','Case Manager RN','Active','East Georgia','BSN, RN, CHPN','(555) 123-4567','123 Main St, Monroe, GA'],
+    ['John Doe','Case Manager LPN','Active','East Georgia','LPN','(555) 234-5678','456 Oak Ave, Watkinsville, GA'],
+    ['Sarah Jones','Supervisor','Active','East Georgia','MSN, RN','(555) 345-6789','789 Pine Rd, Athens, GA'],
+    ['Mike Brown','Admit RN FT','Active','East Georgia','RN','(555) 456-7890','321 Elm St, Gainesville, GA'],
+    ['Lisa Green','On-Call RN','PRN','East Georgia','RN','(555) 567-8901','654 Maple Dr, Lawrenceville, GA'],
+  ];
+  const notes = [
+    [''],
+    ['--- VALID VALUES ---'],
+    ['Role: Case Manager RN, Case Manager LPN, Supervisor, Director, Admit RN FT, Admit RN PRN, On-Call RN'],
+    ['Status: Active, Part Time, PRN, Leave of Absence, Alumni'],
+    ['Zone: East Georgia, Atlanta, Augusta'],
+  ];
+
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...examples, ...notes]);
+
+  // Style header row width
+  ws['!cols'] = [
+    {wch:20},{wch:20},{wch:15},{wch:15},{wch:20},{wch:15},{wch:35}
+  ];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Staff Import');
+  XLSX.writeFile(wb, 'CareCompass_Staff_Template.xlsx');
+  showToast('Template downloaded ✓','ok');
+}
+
 // ─── HOME MARKERS & DISTANCE ALERTS ─────────────────────
 function geocodeNurseHome(nurseId, address) {
   if(!geocoder||!address) return;
@@ -1356,6 +1571,218 @@ function getTabZoneColor(zoneKey) {
     case 'OnCall':       return ADMIT_COLORS['OnCall'];
     default:             return zoneColor;
   }
+}
+
+// ─── STAFF EXCEL IMPORT ──────────────────────────────────
+
+// Column name normalization
+function normalizeCol(str){ return (str||'').toString().toLowerCase().replace(/[^a-z0-9]/g,''); }
+
+// Map role text to internal type
+function parseRole(raw){
+  const r = (raw||'').toString().toLowerCase().trim();
+  if(r.includes('supervisor'))  return {category:'cm',    type:'Supervisor'};
+  if(r.includes('director'))    return {category:'cm',    type:'Director'};
+  if(r.includes('lpn'))         return {category:'cm',    type:'LPN'};
+  if(r.includes('on-call')||r.includes('oncall')||r.includes('on call')) return {category:'admit', admitType:'OnCall'};
+  if(r.includes('admit')&&r.includes('prn')) return {category:'admit', admitType:'PRN'};
+  if(r.includes('admit'))       return {category:'admit', admitType:'FullTime'};
+  if(r.includes('prn')&&!r.includes('admit')) return {category:'cm', type:'RN'}; // PRN CM
+  return {category:'cm', type:'RN'}; // default
+}
+
+// Map status text to internal key
+function parseStatus(raw){
+  const s = (raw||'').toString().toLowerCase().trim();
+  if(s.includes('alumni')||s.includes('inactive')||s.includes('former')) return 'inactive';
+  if(s.includes('leave')||s.includes('loa'))    return 'loa';
+  if(s.includes('part')||s.includes('pt'))      return 'parttime';
+  if(s.includes('prn'))                          return 'prn';
+  return 'active';
+}
+
+// Map zone text to internal key
+function parseZone(raw){
+  const z = (raw||'').toString().toLowerCase().trim();
+  if(z.includes('atlanta')||z.includes('atl'))  return 'atlanta';
+  if(z.includes('augusta')||z.includes('aug'))  return 'augusta';
+  return 'eastga'; // default
+}
+
+async function importStaffExcel(e){
+  const file = e.target.files[0]; if(!file) return;
+  if(typeof XLSX === 'undefined'){ showToast('Spreadsheet library not loaded yet — try again','err'); return; }
+
+  const reader = new FileReader();
+  reader.onload = async (ev) => {
+    try {
+      const wb  = XLSX.read(ev.target.result, {type:'binary'});
+      const ws  = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, {defval:''});
+
+      if(!rows.length){ showToast('No data found in spreadsheet','err'); return; }
+
+      // Build column map from first row keys
+      const sampleKeys = Object.keys(rows[0]);
+      const colMap = {};
+      sampleKeys.forEach(k=>{ colMap[normalizeCol(k)] = k; });
+
+      const getVal = (row, ...aliases) => {
+        for(const a of aliases){
+          const norm = normalizeCol(a);
+          for(const [k,orig] of Object.entries(colMap)){
+            if(k===norm||k.includes(norm)||norm.includes(k)) return (row[orig]||'').toString().trim();
+          }
+        }
+        return '';
+      };
+
+      let added=0, updated=0, skipped=0;
+      const toGeocode = [];
+
+      for(const row of rows){
+        const name = getVal(row,'name','full name','fullname');
+        if(!name) continue;
+
+        const roleRaw   = getVal(row,'role','type','position','title');
+        const statusRaw = getVal(row,'status','employment','employment status');
+        const zoneRaw   = getVal(row,'zone','office','region','location');
+        const creds     = getVal(row,'credentials','certifications','certs','title','credentials title');
+        const phone     = getVal(row,'phone','phone number','cell','mobile','contact');
+        const address   = getVal(row,'address','home address','home','location address');
+
+        const role   = parseRole(roleRaw);
+        const status = parseStatus(statusRaw);
+        const zone   = parseZone(zoneRaw);
+
+        if(role.category === 'admit'){
+          // Find existing or create new admit nurse
+          const existing = admitNurses.find(a=>a.name.toLowerCase()===name.toLowerCase());
+          if(existing){
+            existing.admitType        = role.admitType||existing.admitType;
+            existing.employmentStatus = status;
+            existing.credentials      = creds||existing.credentials;
+            existing.phone            = phone||existing.phone;
+            existing.zoneKey          = zone;
+            if(address && address!==existing.address) toGeocode.push({type:'admit',id:existing.id,address});
+            updated++;
+          } else {
+            const now = new Date();
+            const obj = {
+              id:'a_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),
+              name, admitType:role.admitType||'FullTime',
+              employmentStatus:status, credentials:creds, phone,
+              zoneKey:zone, address, lat:null, lng:null, marker:null,
+              monthlyCount:0, ytdCount:0, evalCount:0,
+              lastResetMonth:now.getMonth(), lastResetYear:now.getFullYear(),
+            };
+            if(address) toGeocode.push({type:'admit',id:obj.id,address});
+            admitNurses.push(obj);
+            added++;
+          }
+        } else {
+          // Case manager / supervisor / director
+          const existing = nurses.find(n=>n.name.toLowerCase()===name.toLowerCase());
+          if(existing){
+            existing.nurseType        = role.type||existing.nurseType;
+            existing.color            = getNurseColor(existing.nurseType);
+            existing.employmentStatus = status;
+            existing.credentials      = creds||existing.credentials;
+            existing.phone            = phone||existing.phone;
+            existing.zoneKey          = zone;
+            if(address && address!==existing.homeAddress) toGeocode.push({type:'nurse',id:existing.id,address});
+            updated++;
+          } else {
+            const obj = {
+              id:'n_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),
+              name, color:getNurseColor(role.type||'RN'),
+              nurseType:role.type||'RN', credentials:creds, phone,
+              employmentStatus:status, zoneKey:zone,
+              counties:[], cities:[], facilities:[],
+              homeAddress:address, homeLat:null, homeLng:null, homeMarker:null,
+              distanceThreshold:null, polygon:null, path:null, facilityMarkers:[],
+            };
+            if(address) toGeocode.push({type:'nurse',id:obj.id,address});
+            nurses.push(obj);
+            added++;
+          }
+        }
+      }
+
+      // Geocode addresses sequentially
+      if(toGeocode.length && mapsLoaded){
+        showToast('Geocoding '+toGeocode.length+' addresses…','');
+        for(const item of toGeocode){
+          await new Promise(resolve=>{
+            geocoder.geocode({address:item.address+', Georgia, USA'},(results,status)=>{
+              if(status==='OK'&&results[0]){
+                const loc=results[0].geometry.location;
+                if(item.type==='nurse'){
+                  const n=nurses.find(x=>x.id===item.id);
+                  if(n){
+                    n.homeLat=loc.lat(); n.homeLng=loc.lng();
+                    n.homeAddress=results[0].formatted_address;
+                    if(n.homeMarker) n.homeMarker.setMap(null);
+                    n.homeMarker=placeHomeMarker(n.homeLat,n.homeLng,n);
+                  }
+                } else {
+                  const a=admitNurses.find(x=>x.id===item.id);
+                  if(a){
+                    a.lat=loc.lat(); a.lng=loc.lng();
+                    a.address=results[0].formatted_address;
+                    if(a.marker) a.marker.setMap(null);
+                    a.marker=placeStaffPin(a.lat,a.lng,a.name,'Admit',getAdmitColor(a.admitType));
+                  }
+                }
+              }
+              setTimeout(resolve, 200); // small delay between geocode calls
+            });
+          });
+        }
+      }
+
+      renderAll(); save(); applyViewVisibility();
+      showToast('Import complete: '+added+' added, '+updated+' updated'+(skipped?' ('+skipped+' skipped)':''),'ok');
+      e.target.value=''; // reset file input
+
+    } catch(err){
+      console.error('Staff import error:', err);
+      showToast('Import failed — check your file format','err');
+    }
+  };
+  reader.readAsBinaryString(file);
+}
+
+function downloadStaffTemplate(){
+  if(typeof XLSX === 'undefined'){ showToast('Spreadsheet library not loaded yet — try again','err'); return; }
+
+  const headers = ['Name','Role','Status','Zone','Credentials','Phone','Home Address'];
+  const examples = [
+    ['Jane Smith','Case Manager RN','Active','East Georgia','BSN, RN, CHPN','(555) 123-4567','123 Main St, Monroe, GA'],
+    ['John Doe','Case Manager LPN','Active','East Georgia','LPN','(555) 234-5678','456 Oak Ave, Watkinsville, GA'],
+    ['Sarah Jones','Supervisor','Active','East Georgia','MSN, RN','(555) 345-6789','789 Pine Rd, Athens, GA'],
+    ['Mike Brown','Admit RN FT','Active','East Georgia','RN','(555) 456-7890','321 Elm St, Gainesville, GA'],
+    ['Lisa Green','On-Call RN','PRN','East Georgia','RN','(555) 567-8901','654 Maple Dr, Lawrenceville, GA'],
+  ];
+  const notes = [
+    [''],
+    ['--- VALID VALUES ---'],
+    ['Role: Case Manager RN, Case Manager LPN, Supervisor, Director, Admit RN FT, Admit RN PRN, On-Call RN'],
+    ['Status: Active, Part Time, PRN, Leave of Absence, Alumni'],
+    ['Zone: East Georgia, Atlanta, Augusta'],
+  ];
+
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...examples, ...notes]);
+
+  // Style header row width
+  ws['!cols'] = [
+    {wch:20},{wch:20},{wch:15},{wch:15},{wch:20},{wch:15},{wch:35}
+  ];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Staff Import');
+  XLSX.writeFile(wb, 'CareCompass_Staff_Template.xlsx');
+  showToast('Template downloaded ✓','ok');
 }
 
 // ─── HOME MARKERS & DISTANCE ALERTS ─────────────────────
@@ -2132,22 +2559,22 @@ function removeFacility(id){
 
 function saveNurseTerritory() {
   if(!pendingItem) return;
+  // Read all form fields up front — used by both new + edit branches
+  const homeInput    = document.getElementById('ntHomeInput');
+  const homeAddr     = homeInput?.value.trim()||'';
+  const preGeoLat    = homeInput?._selectedLat||null;
+  const preGeoLng    = homeInput?._selectedLng||null;
+  const preGeoAddr   = homeInput?._selectedAddr||null;
+  const distOverride = parseInt(document.getElementById('ntDistanceInput')?.value)||null;
+  const nurseTypeRaw = document.getElementById('ntTypeInput')?.value || 'RN';
+  const credentials  = document.getElementById('ntCredsInput')?.value.trim()||'';
+  const phone        = document.getElementById('ntPhoneInput')?.value.trim()||'';
+  const newStatus    = document.getElementById('ntStatusInput')?.value || 'active';
+  const isMoveToAdmit = ['ADMIT_FT','ADMIT_PRN','ONCALL'].includes(nurseTypeRaw);
+  const nurseType    = isMoveToAdmit ? 'RN' : nurseTypeRaw;
+  const typeColor    = getNurseColor(nurseType);
+
   if(pendingItem.isNew) {
-    const homeInput   = document.getElementById('ntHomeInput');
-    const homeAddr    = homeInput?.value.trim()||'';
-    // Use pre-geocoded coords from autocomplete if available
-    const preGeoLat   = homeInput?._selectedLat||null;
-    const preGeoLng   = homeInput?._selectedLng||null;
-    const preGeoAddr  = homeInput?._selectedAddr||null;
-    const distOverride= parseInt(document.getElementById('ntDistanceInput')?.value)||null;
-    const nurseTypeRaw = document.getElementById('ntTypeInput')?.value || 'RN';
-    const credentials  = document.getElementById('ntCredsInput')?.value.trim()||'';
-    const phone        = document.getElementById('ntPhoneInput')?.value.trim()||'';
-    const newStatus    = document.getElementById('ntStatusInput')?.value || 'active';
-    // Handle "Move to..." role changes
-    const isMoveToAdmit = ['ADMIT_FT','ADMIT_PRN','ONCALL'].includes(nurseTypeRaw);
-    const nurseType    = isMoveToAdmit ? 'RN' : nurseTypeRaw; // keep for new nurse, role change handled after save
-    const typeColor    = getNurseColor(nurseType);
     const newNurse={
       id:'n_'+Date.now(),
       name:pendingItem.name,
@@ -2182,10 +2609,6 @@ function saveNurseTerritory() {
     const nurse=nurses.find(n=>n.id===pendingItem.id);
     if(nurse){
       nurse.counties=pendingTerrCounties;nurse.cities=pendingTerrCities;nurse.facilities=pendingTerrFacilities||[];
-      const homeAddr=document.getElementById('ntHomeInput')?.value.trim()||'';
-      const distOverride=parseInt(document.getElementById('ntDistanceInput')?.value)||null;
-      const nurseType=document.getElementById('ntTypeInput')?.value||nurse.nurseType||'RN';
-      const credentials=document.getElementById('ntCredsInput')?.value.trim()||'';
       nurse.nurseType=nurseType;
       nurse.credentials=credentials;
       nurse.phone=phone;
