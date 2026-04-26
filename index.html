@@ -397,10 +397,17 @@ header{display:flex;align-items:center;justify-content:space-between;padding:9px
         </select>
       </div>
     </div>
-    <div style="margin-bottom:8px">
-      <div class="field-label" style="margin-top:0;margin-bottom:3px">Credentials / Title:</div>
-      <input type="text" id="ntCredsInput" placeholder="BSN, RN, CHPN, Clinical Supervisor…"
-        style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:5px 8px;outline:none"/>
+    <div style="display:flex;gap:7px;margin-bottom:8px">
+      <div style="flex:1">
+        <div class="field-label" style="margin-top:0;margin-bottom:3px">Credentials / Title:</div>
+        <input type="text" id="ntCredsInput" placeholder="BSN, RN, CHPN…"
+          style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:5px 8px;outline:none"/>
+      </div>
+      <div style="flex:1">
+        <div class="field-label" style="margin-top:0;margin-bottom:3px">Phone:</div>
+        <input type="tel" id="ntPhoneInput" placeholder="(555) 555-5555"
+          style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:5px 8px;outline:none"/>
+      </div>
     </div>
     <div style="display:flex;gap:8px;margin-bottom:10px;padding:9px 10px;background:var(--bg);border-radius:8px;border:1px solid var(--border)">
       <div style="flex:1">
@@ -493,8 +500,16 @@ header{display:flex;align-items:center;justify-content:space-between;padding:9px
         <option value="eastga" selected>East Georgia</option>
         <option value="augusta">Augusta</option>
       </select>
-      <div class="field-label">Credentials / Title:</div>
-      <input type="text" id="eaCredentials" placeholder="e.g. BSN, RN, CHPN"/>
+      <div style="display:flex;gap:7px">
+        <div style="flex:1">
+          <div class="field-label" style="margin-top:0">Credentials / Title:</div>
+          <input type="text" id="eaCredentials" placeholder="BSN, RN, CHPN…"/>
+        </div>
+        <div style="flex:1">
+          <div class="field-label" style="margin-top:0">Phone:</div>
+          <input type="tel" id="eaPhone" placeholder="(555) 555-5555"/>
+        </div>
+      </div>
       <div class="field-label">Address (for map pin):</div>
       <div style="position:relative">
         <input type="text" id="eaAddr" placeholder="Address or city/zip…" autocomplete="off" oninput="searchEaAddr()"/>
@@ -794,7 +809,7 @@ function save() {
     zoneCounties,
     hospitals:        hospitals.map(h=>({id:h.id,name:h.name,address:h.address,lat:h.lat,lng:h.lng,placeId:h.placeId})),
     masterFacilities: masterFacilities.map(f=>({id:f.id,name:f.name,address:f.address,lat:f.lat,lng:f.lng,placeId:f.placeId,nurseIds:f.nurseIds,census:f.census||0})),
-    nurses:      nurses.map(n=>({id:n.id,name:n.name,color:n.color,nurseType:n.nurseType||'RN',credentials:n.credentials||'',employmentStatus:n.employmentStatus||'active',zoneKey:n.zoneKey,counties:n.counties,cities:n.cities,facilities:n.facilities||[],path:n.path,homeAddress:n.homeAddress||'',homeLat:n.homeLat||null,homeLng:n.homeLng||null,distanceThreshold:n.distanceThreshold||null})),
+    nurses:      nurses.map(n=>({id:n.id,name:n.name,color:n.color,nurseType:n.nurseType||'RN',credentials:n.credentials||'',phone:n.phone||'',employmentStatus:n.employmentStatus||'active',zoneKey:n.zoneKey,counties:n.counties,cities:n.cities,facilities:n.facilities||[],path:n.path,homeAddress:n.homeAddress||'',homeLat:n.homeLat||null,homeLng:n.homeLng||null,distanceThreshold:n.distanceThreshold||null})),
     globalDistanceThreshold,
     admitNurses: admitNurses.map(a=>({id:a.id,name:a.name,admitType:a.admitType||'FullTime',employmentStatus:a.employmentStatus||'active',credentials:a.credentials||'',zoneKey:a.zoneKey,lat:a.lat,lng:a.lng,address:a.address,monthlyCount:a.monthlyCount||0,ytdCount:a.ytdCount||0,evalCount:a.evalCount||0,lastResetMonth:a.lastResetMonth,lastResetYear:a.lastResetYear})),
     staff:       staff.map(s=>({id:s.id,name:s.name,role:s.role,zoneKey:s.zoneKey,nurseIds:s.nurseIds,lat:s.lat,lng:s.lng,address:s.address})),
@@ -1512,6 +1527,8 @@ function openNurseTerrModal(existingNurseId) {
   if(credsInput) credsInput.value = nurse?.credentials || document.getElementById('nurseCredsInput')?.value || '';
   const statusInput2 = document.getElementById('ntStatusInput');
   if(statusInput2) statusInput2.value = nurse?.employmentStatus || 'active';
+  const phoneInput = document.getElementById('ntPhoneInput');
+  if(phoneInput) phoneInput.value = nurse?.phone || '';
   if(homeInput)  homeInput.value  = nurse?.homeAddress || '';
   if(distInput)  distInput.value  = nurse?.distanceThreshold || '';
   if(globalLabel) globalLabel.textContent = globalDistanceThreshold;
@@ -2125,6 +2142,7 @@ function saveNurseTerritory() {
     const distOverride= parseInt(document.getElementById('ntDistanceInput')?.value)||null;
     const nurseTypeRaw = document.getElementById('ntTypeInput')?.value || 'RN';
     const credentials  = document.getElementById('ntCredsInput')?.value.trim()||'';
+    const phone        = document.getElementById('ntPhoneInput')?.value.trim()||'';
     const newStatus    = document.getElementById('ntStatusInput')?.value || 'active';
     // Handle "Move to..." role changes
     const isMoveToAdmit = ['ADMIT_FT','ADMIT_PRN','ONCALL'].includes(nurseTypeRaw);
@@ -2134,7 +2152,7 @@ function saveNurseTerritory() {
       id:'n_'+Date.now(),
       name:pendingItem.name,
       color:typeColor,
-      nurseType, credentials,
+      nurseType, credentials, phone,
       employmentStatus:newStatus,
       zoneKey:pendingItem.zoneKey,
       counties:pendingTerrCounties,
@@ -2170,6 +2188,7 @@ function saveNurseTerritory() {
       const credentials=document.getElementById('ntCredsInput')?.value.trim()||'';
       nurse.nurseType=nurseType;
       nurse.credentials=credentials;
+      nurse.phone=phone;
       nurse.employmentStatus=newStatus;
       nurse.color=getNurseColor(nurseType);
       nurse.distanceThreshold=distOverride;
@@ -2745,6 +2764,7 @@ function openEditAdmit(id){
   document.getElementById('eaStatus').value = a.employmentStatus||'active';
   document.getElementById('eaZone').value = a.zoneKey||'eastga';
   document.getElementById('eaCredentials').value = a.credentials||'';
+  document.getElementById('eaPhone').value = a.phone||'';
   document.getElementById('eaAddr').value = a.address||'';
   document.getElementById('eaAddrStatus').textContent = a.address ? '✓ '+a.address : '';
   openModal('editAdmitModal');
@@ -2808,11 +2828,13 @@ function saveEditAdmit(){
   const addrInput  = document.getElementById('eaAddr').value.trim();
 
   const newCreds = document.getElementById('eaCredentials').value.trim();
+  const newPhone = document.getElementById('eaPhone').value.trim();
   if(!newName){ showToast('Name is required','err'); return; }
 
   // Update fields
   a.name = newName;
   a.credentials = newCreds;
+  a.phone = newPhone;
   a.employmentStatus = newStatus;
   a.zoneKey = newZone;
 
@@ -3307,6 +3329,7 @@ function renderTeamList(){
         </div>
         <div style="font-size:10px;color:${OFFICE_ZONES[m.zoneKey]?.color||'var(--muted)'};margin-top:2px">${OFFICE_ZONES[m.zoneKey]?.label||m.zoneKey}</div>
         ${m.credentials?'<div style="font-size:10px;color:var(--muted);margin-top:2px;font-style:italic">'+m.credentials+'</div>':''}
+        ${m.phone?'<div style="font-size:11px;color:var(--text);margin-top:2px">📞 <a href="tel:'+m.phone+'" style="color:inherit;text-decoration:none">'+m.phone+'</a></div>':''}
         <div style="display:flex;gap:6px;margin-top:6px">
           <div style="flex:1;background:var(--surface2);border-radius:7px;padding:5px 8px;text-align:center">
             <div style="font-family:'DM Mono',monospace;font-size:15px;font-weight:600;color:${color}">${m.monthlyCount||0}</div>
@@ -3344,6 +3367,7 @@ function renderTeamList(){
           <div class="count-badge" title="Active patients">${patients.filter(p=>p.nurseId===m.id&&(!p.status||p.status==='active')).length} active</div>
         </div>
         ${m.credentials?'<div style="font-size:10px;color:var(--muted);margin-top:3px;font-style:italic">'+m.credentials+'</div>':''}
+        ${m.phone?'<div style="font-size:11px;color:var(--text);margin-top:2px">📞 <a href="tel:'+m.phone+'" style="color:inherit;text-decoration:none" onclick="event.stopPropagation()">'+m.phone+'</a></div>':''}
         ${(m.admitMonthly||m.admitYTD)?'<div style="font-size:10px;color:#60a5fa;margin-top:2px">📋 '+(m.admitMonthly||0)+' this month | '+(m.admitYTD||0)+' YTD</div>':''}
         <div style="font-size:10px;color:${OFFICE_ZONES[m.zoneKey]?.color||'var(--muted)'};margin-top:2px">${OFFICE_ZONES[m.zoneKey]?.label||m.zoneKey}</div>
         ${allAreas.length?'<div class="tag-pills">'+allAreas.slice(0,5).map(a=>'<span class="tpill">'+a+'</span>').join('')+(allAreas.length>5?'<span class="tpill">+'+(allAreas.length-5)+' more</span>':'')+'</div>':''}
