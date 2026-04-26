@@ -189,6 +189,15 @@ header{display:flex;align-items:center;justify-content:space-between;padding:9px
   </div>
   <div class="header-actions">
     <div style="display:flex;align-items:center;gap:5px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:4px 10px">
+      <span style="font-size:11px;color:var(--muted);white-space:nowrap">🏠 Office:</span>
+      <select id="preferredOfficeSelect" onchange="setPreferredOffice(this.value)"
+        style="background:transparent;border:none;color:var(--text);font-size:12px;font-weight:600;outline:none;cursor:pointer;font-family:'DM Sans',sans-serif">
+        <option value="eastga">East Georgia</option>
+        <option value="atlanta">Atlanta</option>
+        <option value="augusta">Augusta</option>
+      </select>
+    </div>
+    <div style="display:flex;align-items:center;gap:5px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:4px 10px">
       <span style="font-size:11px;color:var(--muted);white-space:nowrap">⚠️ Alert at</span>
       <input type="number" id="distanceThresholdInput" value="20" min="1" max="999"
         style="width:46px;background:transparent;border:none;color:var(--text);font-size:12px;font-weight:600;outline:none;text-align:center"
@@ -647,6 +656,32 @@ let pendingZoneKey      = null;
 let pendingZoneCounties = [];
 const visible = {nurses:true,patients:true,homes:true,Admit:true,Supervisor:true,HCA:true,Clergy:true,MCW:true,Liaison:true};
 const KEY = 'hospice_v5';
+const PREF_KEY = 'carecompass_prefs';
+
+function loadPrefs(){
+  try { return JSON.parse(localStorage.getItem(PREF_KEY))||{}; } catch(e){ return {}; }
+}
+function savePrefs(prefs){
+  localStorage.setItem(PREF_KEY, JSON.stringify(prefs));
+}
+function getPreferredOffice(){
+  return loadPrefs().preferredOffice || 'eastga';
+}
+function setPreferredOffice(zoneKey){
+  const prefs = loadPrefs();
+  prefs.preferredOffice = zoneKey;
+  savePrefs(prefs);
+  showToast(OFFICE_ZONES[zoneKey].label+' set as your preferred office ✓','ok');
+  const sel = document.getElementById('preferredOfficeSelect');
+  if(sel) sel.value = zoneKey;
+  // Update all zone dropdowns to default to new preference
+  ['nurseZoneInput','admitZoneInput','staffZoneInput'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el && !el.value) el.value = zoneKey;
+  });
+  // Navigate to that office
+  setView(zoneKey);
+}
 
 // ─── PERSISTENCE ─────────────────────────────────────────
 function save() {
@@ -803,8 +838,11 @@ window.initMap=function(){
   setStatus('Georgia overview — assign counties to zones using the Overview tab, then click a zone to drill in');
   placeOfficeMarkers();
   loadSaved();
-  // Default to East Georgia view
-  setTimeout(()=>setView(DEFAULT_VIEW), 500);
+  // Default to preferred office view
+  setTimeout(()=>{
+    const pref = getPreferredOffice();
+    setView(pref);
+  }, 500);
 };
 
 
@@ -3428,6 +3466,14 @@ renderOverview();
 setTimeout(()=>{
   renderTeamAddForm();
   renderTeamList();
+  // Apply preferred office to selector UI
+  const pref = getPreferredOffice();
+  const sel = document.getElementById('preferredOfficeSelect');
+  if(sel) sel.value = pref;
+  // Default zone dropdowns to preferred office
+  document.querySelectorAll('select option[value="'+pref+'"]').forEach(opt=>{
+    opt.selected = true;
+  });
 }, 150);
 </script>
 </body>
