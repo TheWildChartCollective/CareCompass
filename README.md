@@ -1,2 +1,0 @@
-# CareCompass
-Nurse Tracking App
