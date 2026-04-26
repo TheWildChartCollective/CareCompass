@@ -265,6 +265,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:9px
           <option value="PRN">PRN RN</option>
           <option value="LPN">LPN</option>
           <option value="Supervisor">Clinical Supervisor (CM)</option>
+          <option value="Director">Director</option>
         </select>
         <input type="text" id="nurseCredsInput" placeholder="Credentials (e.g. BSN, RN, CHPN)"/>
         <input type="text" id="nurseHomeInput" placeholder="Home address or city/zip (optional)"/>
@@ -385,6 +386,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:9px
           <option value="PRN">PRN RN</option>
           <option value="LPN">LPN</option>
           <option value="Supervisor">Clinical Supervisor (CM)</option>
+          <option value="Director">Director</option>
         </select>
       </div>
       <div style="flex:1">
@@ -571,6 +573,7 @@ const NURSE_COLORS = {
   'PRN':        '#7B6BA8', // deeper slate purple — PRN RN
   'LPN':        '#B8A0C8', // dusty mauve — LPN
   'Supervisor': '#5C3D8F', // deep plum — Supervisor
+  'Director':   '#3B2060', // darkest plum — Director
 };
 const NURSE_BASE_COLOR     = '#9B89C4'; // fallback lavender
 const NURSE_SELECTED_COLOR = '#6B3FA0'; // bright purple when selected
@@ -614,6 +617,7 @@ let pendingTerrFacilities = [];
 let masterFacilities      = []; // {id, name, address, lat, lng, placeId, nurseIds[], census, marker}
 let officeMarkers         = {}; // zoneKey -> google.maps.Marker
 let globalDistanceThreshold = 20; // miles — default alert threshold
+let activeTab = 'overview'; // tracks which sidebar tab is active
 let pendingMasterFacility = null;
 let pendingZoneKey      = null;
 let pendingZoneCounties = [];
@@ -828,20 +832,21 @@ function styleCounty(feature) {
   } else {
     // Drill-in view
     if(inActive){
-      // Active zone — visible fill, thin county grid lines
+      // Active zone — fill color based on active tab
+      const tabColor = getTabZoneColor(currentView);
       return {
-        fillColor:    zoneColor,
-        fillOpacity:  0.22,
-        strokeColor:  zoneColor,
+        fillColor:    tabColor,
+        fillOpacity:  0.18,
+        strokeColor:  tabColor,
         strokeWeight: 0.5,
         strokeOpacity:0.4,
         visible: true,
       };
     } else {
-      // Other zones — dimmed, no county lines
+      // Other zones — dimmed
       return {
         fillColor:    zoneColor,
-        fillOpacity:  0.06,
+        fillOpacity:  0.05,
         strokeColor:  zoneColor,
         strokeWeight: 0,
         strokeOpacity:0,
@@ -914,10 +919,11 @@ function drawZoneBorders() {
         return{lat:parseFloat(lat),lng:parseFloat(lng)};
       }));
 
+    const borderColor = isActive ? getTabZoneColor(currentView) : color;
     outerEdges.forEach(([ptA,ptB])=>{
       polys.push(new google.maps.Polyline({
         path:[ptA,ptB],
-        strokeColor: color,
+        strokeColor: borderColor,
         strokeWeight: isActive ? 3.5 : 1.5,
         strokeOpacity: isActive ? 0.95 : 0.25,
         map, zIndex:9, clickable:false,
@@ -1032,6 +1038,19 @@ function getNurseColorsForCounty(countyName) {
 
 // Highlight counties assigned to nurses with a colored overlay
 
+// Returns the fill color for the zone based on active tab
+function getTabZoneColor(zoneKey) {
+  const zoneColor = OFFICE_ZONES[zoneKey]?.color;
+  switch(activeTab) {
+    case 'nurses':    return NURSE_BASE_COLOR;      // lavender
+    case 'admit':     return '#38bdf8';              // admit blue
+    case 'staff':     return '#9C7A9E';              // muted lavender-staff
+    case 'patients':  return zoneColor;              // zone teal/color
+    case 'facilities':return zoneColor;              // zone color
+    default:          return zoneColor;              // overview = zone color
+  }
+}
+
 // ─── HOME MARKERS & DISTANCE ALERTS ─────────────────────
 function geocodeNurseHome(nurseId, address) {
   if(!geocoder||!address) return;
@@ -1112,6 +1131,19 @@ function checkPatientDistance(patient, nurseId) {
   return {dist:Math.round(dist*10)/10, threshold, over:dist>threshold};
 }
 
+// Returns the fill color for the zone based on active tab
+function getTabZoneColor(zoneKey) {
+  const zoneColor = OFFICE_ZONES[zoneKey]?.color;
+  switch(activeTab) {
+    case 'nurses':    return NURSE_BASE_COLOR;      // lavender
+    case 'admit':     return '#38bdf8';              // admit blue
+    case 'staff':     return '#9C7A9E';              // muted lavender-staff
+    case 'patients':  return zoneColor;              // zone teal/color
+    case 'facilities':return zoneColor;              // zone color
+    default:          return zoneColor;              // overview = zone color
+  }
+}
+
 // ─── HOME MARKERS & DISTANCE ALERTS ─────────────────────
 // Blend multiple hex colors into a single mixed color
 function blendColors(colors) {
@@ -1157,20 +1189,27 @@ function highlightNurseCounties() {
       const isOverlap  = matchingNurses.length > 1;
 
       let fillColor, fillOpacity;
-      if(hasSelection){
+      if(hasSelection && activeTab==='nurses'){
         if(isSelected){
-          // Selected nurse territory — bright purple
-          fillColor   = NURSE_SELECTED_COLOR;
-          fillOpacity = 0.40;
+          // Selected nurse — brighten to their specific role color (saturated version)
+          const roleColor = getNurseColor(matchingNurses.find(n=>n.id===selectedNurseId)?.nurseType||'RN');
+          fillColor   = roleColor;
+          fillOpacity = 0.50;
         } else {
-          // Other nurses — very faded lavender
-          fillColor   = NURSE_BASE_COLOR;
-          fillOpacity = 0.06;
+          // Other nurses — very faded version of their role color
+          fillColor   = matchingNurses[0]?.color || NURSE_BASE_COLOR;
+          fillOpacity = 0.05;
         }
       } else {
-        // No selection — all territories show as soft lavender
-        fillColor   = isOverlap ? blendColors(matchingNurses.map(n=>n.color)) : (matchingNurses[0]?.color||NURSE_COLORS['RN']);
-        fillOpacity = isOverlap ? 0.38 : 0.20;
+        // No selection — use tab-appropriate color
+        if(activeTab==='nurses'){
+          fillColor   = isOverlap ? blendColors(matchingNurses.map(n=>n.color)) : NURSE_BASE_COLOR;
+          fillOpacity = isOverlap ? 0.38 : 0.20;
+        } else {
+          // Non-nurse tab — don't override county fill, let styleCounty handle it
+          fillColor   = getTabZoneColor(currentView);
+          fillOpacity = 0.18;
+        }
       }
 
       map.data.overrideStyle(feature,{
@@ -2350,7 +2389,7 @@ function renderOverview(){
       <div class="zone-stats">
         <div class="zstat"><div class="zstat-num" style="color:${zone.color}">${zNurses.filter(n=>n.nurseType==='RN'||!n.nurseType).length}</div><div class="zstat-label">RNs</div></div>
         <div class="zstat"><div class="zstat-num" style="color:${zone.color}">${zNurses.filter(n=>n.nurseType==='LPN').length}</div><div class="zstat-label">LPNs</div></div>
-        <div class="zstat"><div class="zstat-num" style="color:${zone.color}">${zNurses.filter(n=>n.nurseType==='Supervisor').length}</div><div class="zstat-label">Sup</div></div>
+        <div class="zstat"><div class="zstat-num" style="color:${zone.color}">${zNurses.filter(n=>n.nurseType==='Supervisor'||n.nurseType==='Director').length}</div><div class="zstat-label">Sup/Dir</div></div>
         <div class="zstat"><div class="zstat-num" style="color:${zone.color}">${zPatients.length}</div><div class="zstat-label">Patients</div></div>
       </div>
       <div style="font-size:11px;color:var(--muted);margin-top:7px">→ Click to drill into ${zone.label}</div>
@@ -2365,11 +2404,11 @@ function renderNurseList(){
   // Type legend mini-badges
   const typeLeg=document.getElementById('nurseTypeLegend');
   if(typeLeg){
-    const counts={RN:0,PRN:0,LPN:0,Supervisor:0};
+    const counts={RN:0,PRN:0,LPN:0,Supervisor:0,Director:0};
     filtered.forEach(n=>{ const t=n.nurseType||'RN'; if(counts[t]!==undefined) counts[t]++; });
     typeLeg.innerHTML=Object.entries(counts).filter(([,v])=>v>0).map(([t,v])=>
       '<span style="font-size:9px;padding:1px 5px;border-radius:4px;background:'+NURSE_COLORS[t]+';color:#fff;font-weight:600">'
-      +(t==='Supervisor'?'⭐':t)+' '+v+'</span>'
+      +(t==='Supervisor'?'⭐ SUP':t==='Director'?'👑 DIR':t)+' '+v+'</span>'
     ).join('');
   }
   el.innerHTML=filtered.map(n=>{
@@ -2380,7 +2419,7 @@ function renderNurseList(){
       <div class="card-top">
         <div class="card-dot" style="background:${n.color||'#9B89C4'}"></div>
         <div class="card-name">${n.name}</div>
-        ${n.nurseType==='Supervisor'?'<span style="font-size:9px;background:#5C3D8F;color:#fff;border-radius:4px;padding:2px 5px;font-weight:700;flex-shrink:0">⭐ SUP</span>':n.nurseType==='PRN'?'<span style="font-size:9px;background:#7B6BA8;color:#fff;border-radius:4px;padding:2px 5px;font-weight:700;flex-shrink:0">PRN</span>':n.nurseType==='LPN'?'<span style="font-size:9px;background:#B8A0C8;color:#fff;border-radius:4px;padding:2px 5px;font-weight:700;flex-shrink:0">LPN</span>':''}
+        ${n.nurseType==='Supervisor'?'<span style="font-size:9px;background:#5C3D8F;color:#fff;border-radius:4px;padding:2px 5px;font-weight:700;flex-shrink:0">⭐ SUP</span>':n.nurseType==='Director'?'<span style="font-size:9px;background:#3B2060;color:#fff;border-radius:4px;padding:2px 5px;font-weight:700;flex-shrink:0">👑 DIR</span>':n.nurseType==='PRN'?'<span style="font-size:9px;background:#7B6BA8;color:#fff;border-radius:4px;padding:2px 5px;font-weight:700;flex-shrink:0">PRN</span>':n.nurseType==='LPN'?'<span style="font-size:9px;background:#B8A0C8;color:#fff;border-radius:4px;padding:2px 5px;font-weight:700;flex-shrink:0">LPN</span>':''}
         <div class="count-badge">${ptCount} pts</div>
       </div>
       ${n.credentials?'<div style="font-size:10px;color:var(--muted);margin-top:3px;font-style:italic">'+n.credentials+'</div>':''}
@@ -2507,11 +2546,17 @@ function updateStats(){
 
 // ─── UI HELPERS ──────────────────────────────────────────
 function switchTab(name){
+  activeTab = name;
   ['overview','nurses','admit','staff','facilities','patients'].forEach((t,i)=>{
     document.querySelectorAll('.tab')[i].classList.toggle('active',t===name);
     document.getElementById('tab-'+t).classList.toggle('active',t===name);
   });
   if(name==='facilities') setTimeout(initMasterFacilitySearch, 100);
+  // Instantly recolor territory based on active tab
+  if(currentView!=='all') {
+    applyCountyColors();
+    highlightNurseCounties();
+  }
 }
 function openModal(id){document.getElementById(id).classList.add('open');}
 function closeModal(id){document.getElementById(id).classList.remove('open');pendingItem=null;}
