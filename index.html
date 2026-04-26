@@ -207,10 +207,16 @@ header{display:flex;align-items:center;justify-content:space-between;padding:9px
         onchange="updateGlobalThreshold(this.value)"/>
       <span style="font-size:11px;color:var(--muted)">mi</span>
     </div>
-    <button class="btn secondary" onclick="exportData()">⬇ Export</button>
-    <label class="btn secondary" style="cursor:pointer">⬆ Import<input type="file" accept=".json" onchange="importData(event)" style="display:none"></label>
-    <label class="btn secondary" style="cursor:pointer;background:rgba(155,137,196,.15);border-color:#9B89C4;color:#6B3FA0">👥 Import Staff<input type="file" accept=".xlsx,.xls" onchange="importStaffExcel(event)" style="display:none"></label>
-    <button class="btn secondary" onclick="downloadStaffTemplate()" style="background:rgba(155,137,196,.08);border-color:#9B89C4;color:#6B3FA0" title="Download Excel template">📋 Template</button>
+    <div style="position:relative">
+      <button class="btn secondary" onclick="toggleDataMenu()" id="dataMenuBtn">⬇ Data ▾</button>
+      <div id="dataMenu" style="display:none;position:absolute;right:0;top:100%;margin-top:4px;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.15);z-index:200;min-width:180px;overflow:hidden">
+        <button onclick="exportData();toggleDataMenu()" style="width:100%;text-align:left;padding:9px 14px;background:none;border:none;color:var(--text);font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">⬇ Export Data</button>
+        <label style="width:100%;display:block;padding:9px 14px;color:var(--text);font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">⬆ Import Data<input type="file" accept=".json" onchange="importData(event);toggleDataMenu()" style="display:none"></label>
+        <div style="height:1px;background:var(--border);margin:2px 0"></div>
+        <label style="width:100%;display:block;padding:9px 14px;color:#6B3FA0;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">👥 Import Staff (.xlsx)<input type="file" accept=".xlsx,.xls" onchange="importStaffExcel(event);toggleDataMenu()" style="display:none"></label>
+        <button onclick="downloadStaffTemplate();toggleDataMenu()" style="width:100%;text-align:left;padding:9px 14px;background:none;border:none;color:#6B3FA0;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">📋 Download Staff Template</button>
+      </div>
+    </div>
   </div>
 </header>
 
@@ -1530,6 +1536,23 @@ function getThresholdForNurse(nurse) {
   return nurse.distanceThreshold || globalDistanceThreshold;
 }
 
+function toggleDataMenu(){
+  const menu = document.getElementById('dataMenu');
+  if(!menu) return;
+  menu.style.display = menu.style.display==='none' ? 'block' : 'none';
+  // Close on outside click
+  if(menu.style.display==='block'){
+    setTimeout(()=>{
+      document.addEventListener('click', function handler(e){
+        if(!document.getElementById('dataMenuBtn').contains(e.target) && !menu.contains(e.target)){
+          menu.style.display='none';
+          document.removeEventListener('click', handler);
+        }
+      });
+    }, 10);
+  }
+}
+
 function updateGlobalThreshold(val) {
   globalDistanceThreshold = parseInt(val)||20;
   document.getElementById('distanceThresholdInput').value = globalDistanceThreshold;
@@ -2259,8 +2282,9 @@ function editFacilityCensus(id, val) {
 
 function renderFacilityList() {
   const el = document.getElementById('facilityList'); if(!el) return;
-  const filtered = currentView==='all' ? masterFacilities
-    : masterFacilities.filter(f=>f.nurseIds.some(nid=>{ const n=nurses.find(x=>x.id===nid); return n&&n.zoneKey===currentView; })||f.nurseIds.length===0);
+  const filtered = (currentView==='all' ? masterFacilities
+    : masterFacilities.filter(f=>f.nurseIds.some(nid=>{ const n=nurses.find(x=>x.id===nid); return n&&n.zoneKey===currentView; })||f.nurseIds.length===0))
+    .slice().sort((a,b)=>a.name.localeCompare(b.name));
   document.getElementById('facilityCountBadge').textContent = masterFacilities.length||'';
   if(!filtered.length){
     el.innerHTML='<div class="empty-state">No facilities yet.<br>Search above to add one.</div>';
@@ -3717,7 +3741,8 @@ function renderTeamList(){
   if(hdr) hdr.textContent=labels[teamFilter]||'Team';
 
   const {nurses:filteredNurses, admits:filteredAdmits} = getTeamFilterMembers();
-  const allMembers = [...filteredNurses.map(n=>({...n,_kind:'nurse'})), ...filteredAdmits.map(a=>({...a,_kind:'admit'}))];
+  const allMembers = [...filteredNurses.map(n=>({...n,_kind:'nurse'})), ...filteredAdmits.map(a=>({...a,_kind:'admit'}))]
+    .sort((a,b)=>a.name.localeCompare(b.name));
 
   // Update type legend
   const typeLeg=document.getElementById('nurseTypeLegend');
@@ -3830,7 +3855,8 @@ function renderOverview(){
 
 function renderNurseList(){
   const el=document.getElementById('nurseList');
-  const filtered=currentView==='all'?nurses:nurses.filter(n=>n.zoneKey===currentView);
+  const filtered=(currentView==='all'?nurses:nurses.filter(n=>n.zoneKey===currentView))
+    .slice().sort((a,b)=>a.name.localeCompare(b.name));
   if(!filtered.length){el.innerHTML='<div class="empty-state">No case managers yet.<br>Add one above.</div>';return;}
   // Type legend mini-badges
   const typeLeg=document.getElementById('nurseTypeLegend');
@@ -3932,6 +3958,7 @@ function renderPatientList(){
   if(patientViewMode==='active'){
     filtered=filtered.filter(p=>['active','pending','hospital'].includes(p.status||'active'));
   }
+  filtered.sort((a,b)=>a.name.localeCompare(b.name));
   if(!filtered.length){
     el.innerHTML='<div class="empty-state">'+(patientViewMode==='active'?'No active patients.':'No patients for this year.')+'</div>';
     return;
@@ -3986,12 +4013,22 @@ function renderLegend(){
     document.getElementById('legRoles').innerHTML='';
   } else {
     const zn=nurses.filter(n=>n.zoneKey===currentView);
-    legN.innerHTML=zn.length===0?'<div style="font-size:11px;color:var(--muted)">No nurses in zone</div>':zn.map(n=>{
-      const cnt=patients.filter(p=>p.nurseId===n.id).length;
-      const isSelected=n.id===selectedNurseId;
-      const swatchColor=isSelected?NURSE_SELECTED_COLOR:(n.color||NURSE_COLORS['RN']);
-      const typeTag=n.nurseType==='Supervisor'?'⭐ ':n.nurseType==='PRN'?'PRN ':n.nurseType==='LPN'?'LPN ':'';
-      return `<div class="leg-item ${visible.nurses?'':'dimmed'}" onclick="selectNurse('${n.id}')" style="${isSelected?'background:rgba(107,63,160,.08);border-radius:5px':''}"><div class="leg-swatch" style="background:${swatchColor}"></div><span style="${isSelected?'font-weight:600;color:#6B3FA0':''}">${typeTag}${n.name}</span><span class="leg-count">${cnt}</span></div>`;
+    // All staff in zone — nurses + admit + on-call sorted alphabetically
+const allZoneStaff = [
+      ...zn.map(n=>({...n,_kind:'nurse'})),
+      ...admitNurses.filter(a=>a.zoneKey===currentView).map(a=>({...a,_kind:'admit'})),
+    ].sort((a,b)=>a.name.localeCompare(b.name));
+    legN.innerHTML=allZoneStaff.length===0?'<div style="font-size:11px;color:var(--muted)">No staff in zone</div>':allZoneStaff.map(m=>{
+      if(m._kind==='admit'){
+        const color=getAdmitColor(m.admitType);
+        const typeTag=m.admitType==='OnCall'?'🌙 ':'';
+        return `<div class="leg-item ${visible.Admit?'':'dimmed'}"><div class="leg-swatch" style="background:${color};border-radius:50%"></div><span>${typeTag}${m.name}</span></div>`;
+      }
+      const cnt=patients.filter(p=>p.nurseId===m.id).length;
+      const isSelected=m.id===selectedNurseId;
+      const swatchColor=isSelected?NURSE_SELECTED_COLOR:(m.color||NURSE_COLORS['RN']);
+      const typeTag=m.nurseType==='Supervisor'?'⭐ ':m.nurseType==='Director'?'👑 ':m.nurseType==='LPN'?'LPN ':'';
+      return `<div class="leg-item ${visible.nurses?'':'dimmed'}" onclick="selectNurse('${m.id}')" style="${isSelected?'background:rgba(107,63,160,.08);border-radius:5px':''}"><div class="leg-swatch" style="background:${swatchColor}"></div><span style="${isSelected?'font-weight:600;color:#6B3FA0':''}">${typeTag}${m.name}</span><span class="leg-count">${cnt}</span></div>`;
     }).join('');
     const roleRows=[
       {key:'Admit',html:`<div class="leg-dot" style="border:2px solid #38bdf8;background:transparent"></div>`,label:'Admit RNs',color:'#38bdf8',count:admitNurses.filter(a=>a.zoneKey===currentView).length},
