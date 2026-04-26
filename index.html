@@ -787,47 +787,67 @@ function loadCountyFallback(){
   );
 }
 function styleCounty(feature) {
-  const name    = feature.getProperty('countyName')||'';
-  let zoneKey   = null;
-  for(const [zk,counties] of Object.entries(zoneCounties)){
-    if((counties||[]).includes(name)){zoneKey=zk;break;}
-  }
-  const zoneColor = zoneKey ? OFFICE_ZONES[zoneKey].color : null;
-  const isAll     = currentView==='all';
-  const isActive  = zoneKey===currentView;
+  const name = feature.getProperty('countyName')||'';
 
-  if(!zoneColor){
-    // Unserviced GA county — peach fill, thin peach county lines (peach state!)
+  // Find all zones this county belongs to
+  const matchingZones = [];
+  for(const [zk,counties] of Object.entries(zoneCounties)){
+    if((counties||[]).includes(name)) matchingZones.push(zk);
+  }
+
+  const isAll    = currentView==='all';
+  const inActive = matchingZones.includes(currentView);
+
+  // Unassigned county
+  if(!matchingZones.length){
     return {
       fillColor:    '#FFCBA4',
-      fillOpacity:  0.30,
+      fillOpacity:  isAll ? 0.22 : 0.10,
       strokeColor:  '#E8956D',
-      strokeWeight: 0.7,
-      strokeOpacity:0.65,
+      strokeWeight: isAll ? 0 : 0.3,
+      strokeOpacity:0.4,
       visible: true,
     };
   }
 
-  if(isAll||isActive){
-    // Active zone — bright fill only, NO stroke (borders handled by drawZoneBorders)
+  // Blend color if county belongs to multiple zones
+  const zoneColor = matchingZones.length > 1
+    ? blendColors(matchingZones.map(zk=>OFFICE_ZONES[zk].color))
+    : OFFICE_ZONES[matchingZones[0]].color;
+
+  if(isAll){
+    // Overview — smooth fill, NO county borders at all
     return {
       fillColor:    zoneColor,
-      fillOpacity:  0.18,
+      fillOpacity:  matchingZones.length > 1 ? 0.45 : 0.28,
       strokeColor:  zoneColor,
       strokeWeight: 0,
       strokeOpacity:0,
       visible: true,
     };
   } else {
-    // Other zones — muted fill only
-    return {
-      fillColor:    zoneColor,
-      fillOpacity:  0.06,
-      strokeColor:  zoneColor,
-      strokeWeight: 0,
-      strokeOpacity:0,
-      visible: true,
-    };
+    // Drill-in view
+    if(inActive){
+      // Active zone — visible fill, thin county grid lines
+      return {
+        fillColor:    zoneColor,
+        fillOpacity:  0.22,
+        strokeColor:  zoneColor,
+        strokeWeight: 0.5,
+        strokeOpacity:0.4,
+        visible: true,
+      };
+    } else {
+      // Other zones — dimmed, no county lines
+      return {
+        fillColor:    zoneColor,
+        fillOpacity:  0.06,
+        strokeColor:  zoneColor,
+        strokeWeight: 0,
+        strokeOpacity:0,
+        visible: true,
+      };
+    }
   }
 }
 
@@ -844,84 +864,65 @@ function drawZoneBorders() {
   Object.entries(zoneCounties).forEach(([zk, counties])=>{
     if(!counties||!counties.length) return;
     const color    = OFFICE_ZONES[zk]?.color;
-    const isActive = currentView==='all'||currentView===zk;
+    const isActive = currentView===zk;
+    const isAll    = currentView==='all';
     const polys    = [];
 
-    // Collect ALL edges from all counties in this zone
-    // An edge is a pair of consecutive lat/lng points
-    // Interior edges are shared by two counties → appear twice
-    // Outer edges appear only once → these form the zone boundary
-    const edgeMap = {}; // "lat1,lng1|lat2,lng2" -> count
+    if(isAll){
+      // Overview: no zone borders drawn — fill only, clean look
+      return;
+    }
 
+    // Drill-in: use edge detection to draw only the outer boundary
+    const edgeMap = {};
     const roundLL = ll => {
-      const lat = Math.round(ll.lat() * 10000) / 10000;
-      const lng = Math.round(ll.lng() * 10000) / 10000;
+      const lat=Math.round(ll.lat()*10000)/10000;
+      const lng=Math.round(ll.lng()*10000)/10000;
       return `${lat},${lng}`;
     };
 
-    const allCountyPaths = [];
-
     map.data.forEach(feature=>{
-      const name = feature.getProperty('countyName')||'';
-      if(!counties.includes(name)) return;
-      const geom = feature.getGeometry();
+      const name=feature.getProperty('countyName')||'';
+      if(!(counties||[]).includes(name)) return;
+      const geom=feature.getGeometry();
       if(!geom) return;
-
-      const processPaths = paths => {
+      const processPaths = paths=>{
         paths.forEach(path=>{
           if(!path||!path.length) return;
-          allCountyPaths.push(path);
           for(let i=0;i<path.length;i++){
-            const a = roundLL(path[i]);
-            const b = roundLL(path[(i+1)%path.length]);
-            // Normalize edge key so a->b and b->a are the same edge
-            const key = a < b ? `${a}|${b}` : `${b}|${a}`;
-            edgeMap[key] = (edgeMap[key]||0) + 1;
+            const a=roundLL(path[i]);
+            const b=roundLL(path[(i+1)%path.length]);
+            const key=a<b?`${a}|${b}`:`${b}|${a}`;
+            edgeMap[key]=(edgeMap[key]||0)+1;
           }
         });
       };
-
       try {
-        const rings = geom.getArray();
-        processPaths(rings.map(r=>r.getArray ? r.getArray() : []));
-      } catch(e) {
-        const path = [];
-        try { geom.forEachLatLng(ll=>path.push(ll)); } catch(e2){}
+        processPaths(geom.getArray().map(r=>r.getArray?r.getArray():[]));
+      } catch(e){
+        const path=[];
+        try{geom.forEachLatLng(ll=>path.push(ll));}catch(e2){}
         if(path.length) processPaths([path]);
       }
     });
 
-    // Draw thin county fill borders (all edges, thin)
-    allCountyPaths.forEach(path=>{
-      polys.push(new google.maps.Polygon({
-        paths: path,
-        fillOpacity: 0,
+    // Only draw outer edges (appear once)
+    const outerEdges = Object.entries(edgeMap)
+      .filter(([,count])=>count===1)
+      .map(([key])=>key.split('|').map(s=>{
+        const[lat,lng]=s.split(',');
+        return{lat:parseFloat(lat),lng:parseFloat(lng)};
+      }));
+
+    outerEdges.forEach(([ptA,ptB])=>{
+      polys.push(new google.maps.Polyline({
+        path:[ptA,ptB],
         strokeColor: color,
-        strokeWeight: isActive ? 1 : 0.4,
-        strokeOpacity: isActive ? 0.5 : 0.2,
-        map, zIndex: 6, clickable: false,
+        strokeWeight: isActive ? 3.5 : 1.5,
+        strokeOpacity: isActive ? 0.95 : 0.25,
+        map, zIndex:9, clickable:false,
       }));
     });
-
-    // Draw ONLY outer boundary edges as thick polylines
-    // Group consecutive outer edges into polyline segments
-    const outerEdges = Object.entries(edgeMap)
-      .filter(([key, count]) => count === 1)
-      .map(([key]) => key.split('|').map(s=>{ const [lat,lng]=s.split(','); return {lat:parseFloat(lat),lng:parseFloat(lng)}; }));
-
-    // Build connected segments from outer edges
-    if(outerEdges.length > 0){
-      // Draw each outer edge as a thick polyline
-      outerEdges.forEach(([ptA, ptB])=>{
-        polys.push(new google.maps.Polyline({
-          path: [ptA, ptB],
-          strokeColor: color,
-          strokeWeight: isActive ? 4 : 1.5,
-          strokeOpacity: isActive ? 0.95 : 0.25,
-          map, zIndex: 9, clickable: false,
-        }));
-      });
-    }
 
     zoneBorderPolygons[zk] = polys;
   });
