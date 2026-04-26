@@ -52,6 +52,8 @@ header{display:flex;align-items:center;justify-content:space-between;padding:9px
 .sidebar{width:300px;background:#f2f5f1;border-right:1px solid #c2d0c2;display:flex;flex-direction:column;overflow:hidden;flex-shrink:0;}
 .stats-strip{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;}
 .stat-box{flex:1;padding:6px 3px;text-align:center;border-right:1px solid var(--border);}
+.stat-box.clickable{cursor:pointer;border-radius:7px;transition:background .15s;}
+.stat-box.clickable:hover{background:var(--surface2);}
 .stat-box:last-child{border-right:none;}
 .stat-num{font-family:'DM Mono',monospace;font-size:14px;font-weight:500;color:#3F5A45;}
 .stat-num.warn{color:var(--warn);}
@@ -239,12 +241,12 @@ header{display:flex;align-items:center;justify-content:space-between;padding:9px
 <div class="main">
   <div class="sidebar">
     <div class="stats-strip">
-      <div class="stat-box"><div class="stat-num" id="stNurses">0</div><div class="stat-label">Case Mgrs</div></div>
-      <div class="stat-box"><div class="stat-num" id="stAdmit">0</div><div class="stat-label">Admit RNs</div></div>
-      <div class="stat-box"><div class="stat-num" id="stStaff">0</div><div class="stat-label">Staff</div></div>
-      <div class="stat-box"><div class="stat-num" id="stPatients">0</div><div class="stat-label">Patients</div></div>
-      <div class="stat-box"><div class="stat-num" id="stFacilities">0</div><div class="stat-label">Facilities</div></div>
-      <div class="stat-box"><div class="stat-num warn" id="stUnassigned">0</div><div class="stat-label">Unassigned</div></div>
+      <div class="stat-box clickable" onclick="switchTab('team');setTeamFilter('casemanagers')" title="Go to Case Managers"><div class="stat-num" id="stNurses">0</div><div class="stat-label">Case Mgrs</div></div>
+      <div class="stat-box clickable" onclick="switchTab('team');setTeamFilter('admit')" title="Go to Admit RNs"><div class="stat-num" id="stAdmit">0</div><div class="stat-label">Admit RNs</div></div>
+      <div class="stat-box clickable" onclick="switchTab('team');setTeamFilter('allnurses')" title="Go to All Staff"><div class="stat-num" id="stStaff">0</div><div class="stat-label">Staff</div></div>
+      <div class="stat-box clickable" onclick="switchTab('patients')" title="Go to Patients"><div class="stat-num" id="stPatients">0</div><div class="stat-label">Patients</div></div>
+      <div class="stat-box clickable" onclick="switchTab('facilities')" title="Go to Facilities"><div class="stat-num" id="stFacilities">0</div><div class="stat-label">Facilities</div></div>
+      <div class="stat-box clickable" onclick="switchTab('patients');setPatientView('active')" title="View Unassigned Patients"><div class="stat-num warn" id="stUnassigned">0</div><div class="stat-label">Unassigned</div></div>
     </div>
 
     <div class="sidebar-tabs">
@@ -262,12 +264,20 @@ header{display:flex;align-items:center;justify-content:space-between;padding:9px
 
     <!-- TEAM -->
     <div class="tab-content" id="tab-team">
-      <!-- Team filter bar -->
-      <div style="padding:8px 12px 0;flex-shrink:0">
-        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">
+      <!-- Team filter bar — collapsible -->
+      <div style="padding:6px 12px 0;flex-shrink:0">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <span style="font-size:11px;font-weight:600;color:var(--muted)">FILTER</span>
+          <button onclick="toggleTeamFilters()" id="teamFilterToggle"
+            style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:2px 6px;border-radius:5px;transition:all .15s"
+            onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+            ▲ Hide
+          </button>
+        </div>
+        <div id="teamFilterButtons" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px">
           <button class="team-filter-btn active" id="tf-casemanagers" onclick="setTeamFilter('casemanagers')">Case Managers</button>
           <button class="team-filter-btn" id="tf-allnurses" onclick="setTeamFilter('allnurses')">All Nurses</button>
-          <div style="width:100%;height:1px;background:var(--border);margin:2px 0"></div>
+          <div style="width:100%;height:1px;background:var(--border);margin:1px 0"></div>
           <button class="team-filter-btn sm" id="tf-RN" onclick="setTeamFilter('RN')">FT RN</button>
           <button class="team-filter-btn sm" id="tf-PRN" onclick="setTeamFilter('PRN')">PRN RN</button>
           <button class="team-filter-btn sm" id="tf-LPN" onclick="setTeamFilter('LPN')">LPN</button>
@@ -278,7 +288,15 @@ header{display:flex;align-items:center;justify-content:space-between;padding:9px
         </div>
       </div>
 
-      <!-- Add form (changes based on filter) -->
+      <!-- Add form (changes based on filter) — collapsible -->
+      <div style="padding:0 12px 2px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:11px;font-weight:600;color:var(--muted)">ADD</span>
+        <button onclick="toggleTeamAddForm()" id="teamAddFormToggle"
+          style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:2px 6px;border-radius:5px;transition:all .15s"
+          onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+          ▲ Hide
+        </button>
+      </div>
       <div id="teamAddForm" style="padding:0 12px 9px;flex-shrink:0">
         <!-- Populated by renderTeamAddForm() -->
       </div>
@@ -2945,6 +2963,24 @@ function setPatientView(mode){
   document.getElementById('pv-all').classList.toggle('active',mode==='all');
   renderPatientList();
   applyViewVisibility();
+}
+
+function toggleTeamAddForm(){
+  const form = document.getElementById('teamAddForm');
+  const toggle = document.getElementById('teamAddFormToggle');
+  if(!form||!toggle) return;
+  const hidden = form.style.display==='none';
+  form.style.display = hidden ? '' : 'none';
+  toggle.textContent = hidden ? '▲ Hide' : '▼ Show';
+}
+
+function toggleTeamFilters(){
+  const btn = document.getElementById('teamFilterButtons');
+  const toggle = document.getElementById('teamFilterToggle');
+  if(!btn||!toggle) return;
+  const hidden = btn.style.display==='none';
+  btn.style.display = hidden ? 'flex' : 'none';
+  toggle.textContent = hidden ? '▲ Hide' : '▼ Show';
 }
 
 function setTeamFilter(filter){
