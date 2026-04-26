@@ -299,6 +299,10 @@ header{display:flex;align-items:center;justify-content:space-between;padding:9px
 
 <!-- PATIENTS -->
     <div class="tab-content" id="tab-patients">
+      <div style="display:flex;gap:6px;padding:8px 12px 0;flex-shrink:0">
+        <button class="team-filter-btn active" id="pv-active" onclick="setPatientView('active')" style="flex:1;text-align:center">Active</button>
+        <button class="team-filter-btn" id="pv-all" onclick="setPatientView('all')" style="flex:1;text-align:center">All (Year)</button>
+      </div>
       <div class="sec-hdr">Add Patient</div>
       <div class="add-form">
         <input type="text" id="patientNameInput" placeholder="Patient code (e.g. MalL)"/>
@@ -453,22 +457,54 @@ header{display:flex;align-items:center;justify-content:space-between;padding:9px
       </select>
       <div class="field-label" style="margin-top:4px">Status:</div>
       <select id="mPatientStatus">
+        <option value="pending">🟡 Pending</option>
         <option value="active">🟢 Active</option>
         <option value="hospital">🏥 Hospital — Plan to Readmit</option>
+        <option value="evaluated">🔍 Evaluated — Did Not Admit</option>
         <option value="transferred">🔄 Transferred to Another Hospice</option>
         <option value="discharged">📋 Discharged</option>
         <option value="deceased">⚫ Deceased</option>
       </select>
+      <div id="mPatientHospitalRow" style="display:none;margin-top:4px">
+        <div class="field-label" style="margin-top:0;margin-bottom:3px">Which hospital?</div>
+        <select id="mPatientHospitalSelect" onchange="onHospitalSelectChange(this.value)"
+          style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px;padding:6px 9px;outline:none;margin-bottom:4px">
+          <option value="">— Select hospital —</option>
+        </select>
+        <div id="mPatientHospitalNewRow" style="display:none;position:relative">
+          <input type="text" id="mPatientHospitalSearch" placeholder="Search hospital name…"
+            autocomplete="off" oninput="searchHospital()"
+            style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px;padding:6px 9px;outline:none"/>
+          <div id="mPatientHospitalSuggestions" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:0 0 7px 7px;z-index:300;max-height:150px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.15)"></div>
+        </div>
+        <div id="mPatientHospitalConfirm" style="font-size:10px;color:var(--accent2);margin-top:3px;min-height:14px"></div>
+        <input type="hidden" id="mPatientHospitalId"/>
+      </div>
       <div style="display:flex;align-items:center;gap:7px;margin-top:4px">
         <input type="checkbox" id="mPatientReadmit" style="accent-color:#9B89C4;width:13px;height:13px"/>
         <label for="mPatientReadmit" style="font-size:11px;color:var(--muted);cursor:pointer">This is a readmission</label>
         <span id="mPatientReadmitHint" style="font-size:10px;color:var(--warn);display:none">⚠️ Name match found</span>
       </div>
       <div id="mPatientFacilityRow" style="display:none">
-        <div class="field-label">Facility name (optional):</div>
-        <input type="text" id="mPatientFacilityName" placeholder="e.g. Pruitt Health Monroe"/>
+        <div class="field-label">Select facility:</div>
+        <select id="mPatientFacilitySelect" onchange="onPatientFacilitySelect(this.value)"
+          style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px;padding:6px 9px;outline:none">
+          <option value="">— Pick from your facility list —</option>
+        </select>
+        <div id="mPatientFacilityNewRow" style="display:none;margin-top:4px">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:3px">Not in your list? Search to add:</div>
+          <div style="position:relative">
+            <input type="text" id="mPatientFacilitySearch" placeholder="Search facility name or address…"
+              autocomplete="off" oninput="searchPatientFacility()"
+              style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px;padding:6px 9px;outline:none"/>
+            <div id="mPatientFacilitySuggestions" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:0 0 7px 7px;z-index:300;max-height:150px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.15)"></div>
+          </div>
+        </div>
+        <div id="mPatientFacilityConfirm" style="font-size:10px;color:var(--accent2);margin-top:3px;min-height:14px"></div>
         <div class="field-label" style="margin-top:4px">Room / Location (optional):</div>
         <input type="text" id="mPatientRoom" placeholder="e.g. Memory Care Rm 103, AL Rm 204…"/>
+        <input type="hidden" id="mPatientFacilityName"/>
+        <input type="hidden" id="mPatientFacilityId"/>
       </div>
       <div class="field-label">Assign to nurse:</div>
       <select id="mPatientNurse"><option value="">— Unassigned —</option></select>
@@ -530,6 +566,7 @@ const OFFICE_ZONES = {
 };
 const GA_CENTER = {lat:32.8,lng:-83.6};
 const GA_ZOOM   = 7;
+const DEFAULT_VIEW = 'eastga'; // default to East Georgia on load
 
 const ROLES = {
   Supervisor:{ label:'Clinical Supervisor', color:'#c084fc' },
@@ -599,6 +636,8 @@ let pendingTerrCounties   = [];
 let pendingTerrCities     = [];
 let pendingTerrFacilities = [];
 let masterFacilities      = []; // {id, name, address, lat, lng, placeId, nurseIds[], census, marker}
+let hospitals             = []; // {id, name, address, lat, lng, placeId, marker} — auto-builds as patients are hospitalized
+let patientViewMode       = 'active'; // 'active' or 'all'
 let officeMarkers         = {}; // zoneKey -> google.maps.Marker
 let globalDistanceThreshold = 20; // miles — default alert threshold
 let activeTab = 'overview'; // tracks which sidebar tab is active
@@ -613,12 +652,13 @@ const KEY = 'hospice_v5';
 function save() {
   localStorage.setItem(KEY, JSON.stringify({
     zoneCounties,
+    hospitals:        hospitals.map(h=>({id:h.id,name:h.name,address:h.address,lat:h.lat,lng:h.lng,placeId:h.placeId})),
     masterFacilities: masterFacilities.map(f=>({id:f.id,name:f.name,address:f.address,lat:f.lat,lng:f.lng,placeId:f.placeId,nurseIds:f.nurseIds,census:f.census||0})),
     nurses:      nurses.map(n=>({id:n.id,name:n.name,color:n.color,nurseType:n.nurseType||'RN',credentials:n.credentials||'',zoneKey:n.zoneKey,counties:n.counties,cities:n.cities,facilities:n.facilities||[],path:n.path,homeAddress:n.homeAddress||'',homeLat:n.homeLat||null,homeLng:n.homeLng||null,distanceThreshold:n.distanceThreshold||null})),
     globalDistanceThreshold,
-    admitNurses: admitNurses.map(a=>({id:a.id,name:a.name,admitType:a.admitType||'FullTime',zoneKey:a.zoneKey,lat:a.lat,lng:a.lng,address:a.address,monthlyCount:a.monthlyCount||0,ytdCount:a.ytdCount||0,lastResetMonth:a.lastResetMonth,lastResetYear:a.lastResetYear})),
+    admitNurses: admitNurses.map(a=>({id:a.id,name:a.name,admitType:a.admitType||'FullTime',zoneKey:a.zoneKey,lat:a.lat,lng:a.lng,address:a.address,monthlyCount:a.monthlyCount||0,ytdCount:a.ytdCount||0,evalCount:a.evalCount||0,lastResetMonth:a.lastResetMonth,lastResetYear:a.lastResetYear})),
     staff:       staff.map(s=>({id:s.id,name:s.name,role:s.role,zoneKey:s.zoneKey,nurseIds:s.nurseIds,lat:s.lat,lng:s.lng,address:s.address})),
-    patients:    patients.map(p=>({id:p.id,name:p.name,address:p.address,lat:p.lat,lng:p.lng,nurseId:p.nurseId,admitId:p.admitId,admitterType:p.admitterType||null,admitDate:p.admitDate||null,locType:p.locType,facilityName:p.facilityName,roomNote:p.roomNote||null,status:p.status||'active',isReadmit:p.isReadmit||false})),
+    patients:    patients.map(p=>({id:p.id,name:p.name,address:p.address,lat:p.lat,lng:p.lng,nurseId:p.nurseId,admitId:p.admitId,admitterType:p.admitterType||null,admitDate:p.admitDate||null,locType:p.locType,facilityName:p.facilityName,facilityId:p.facilityId||null,roomNote:p.roomNote||null,status:p.status||'active',isReadmit:p.isReadmit||false,hospitalId:p.hospitalId||null})),
   }));
 }
 
@@ -632,14 +672,20 @@ function loadSaved() {
     // Clear arrays before loading to prevent duplication on repeated calls
     nurses.forEach(n=>{if(n.polygon)n.polygon.setMap(null);});
     [...admitNurses,...staff,...patients].forEach(x=>{if(x.marker)x.marker.setMap(null);});
+    hospitals.forEach(h=>{if(h.marker)h.marker.setMap(null);});
     masterFacilities.forEach(f=>{if(f.marker)f.marker.setMap(null);});
-    masterFacilities=[]; nurses=[]; admitNurses=[]; staff=[]; patients=[];
+    hospitals=[]; masterFacilities=[]; nurses=[]; admitNurses=[]; staff=[]; patients=[];
     if(d.zoneCounties) { zoneCounties=d.zoneCounties; applyCountyColors(); }
     if(d.globalDistanceThreshold) {
       globalDistanceThreshold=d.globalDistanceThreshold;
       const el=document.getElementById('distanceThresholdInput');
       if(el) el.value=globalDistanceThreshold;
     }
+    (d.hospitals||[]).forEach(h=>{
+      const obj={...h,marker:null};
+      obj.marker=placeHospitalMarker(obj);
+      hospitals.push(obj);
+    });
     (d.masterFacilities||[]).forEach(f=>{
       const obj={...f,marker:null};
       obj.marker=placeMasterFacilityMarker(obj);
@@ -687,6 +733,7 @@ function importData(e) {
       _loadSavedCalled=true;
       if(d.zoneCounties){zoneCounties=d.zoneCounties;applyCountyColors();}
       if(d.globalDistanceThreshold){globalDistanceThreshold=d.globalDistanceThreshold;const el=document.getElementById('distanceThresholdInput');if(el)el.value=globalDistanceThreshold;}
+      (d.hospitals||[]).forEach(h=>{const obj={...h,marker:null};obj.marker=placeHospitalMarker(obj);hospitals.push(obj);});
       (d.masterFacilities||[]).forEach(f=>{const obj={...f,marker:null};obj.marker=placeMasterFacilityMarker(obj);masterFacilities.push(obj);});
       (d.nurses||[]).forEach(n=>{const obj={...n,polygon:null,facilityMarkers:[],homeMarker:null};if(n.path&&n.path.length>2)obj.polygon=drawManualPolygon(n.path,n.color,n.id);if(n.homeLat&&n.homeLng)obj.homeMarker=placeHomeMarker(n.homeLat,n.homeLng,obj);nurses.push(obj);});
       (d.admitNurses||[]).forEach(a=>{const obj={...a,marker:null};if(a.lat&&a.lng)obj.marker=placeStaffPin(a.lat,a.lng,a.name,'Admit');admitNurses.push(obj);});
@@ -756,6 +803,8 @@ window.initMap=function(){
   setStatus('Georgia overview — assign counties to zones using the Overview tab, then click a zone to drill in');
   placeOfficeMarkers();
   loadSaved();
+  // Default to East Georgia view
+  setTimeout(()=>setView(DEFAULT_VIEW), 500);
 };
 
 
@@ -1488,6 +1537,65 @@ function saveMasterFacility() {
   showToast(facility.name+' added','ok');
 }
 
+// ─── HOSPITAL REGISTRY ───────────────────────────────────
+function placeHospitalMarker(hospital) {
+  if(!map||!hospital.lat||!hospital.lng) return null;
+  const marker = new google.maps.Marker({
+    position:{lat:hospital.lat,lng:hospital.lng},
+    map, zIndex:20, visible:true,
+    title: hospital.name,
+    icon:{
+      path:'M -0.5,-1 L 0.5,-1 L 0.5,-0.2 L 1,-0.2 L 1,0.2 L 0.5,0.2 L 0.5,1 L -0.5,1 L -0.5,0.2 L -1,0.2 L -1,-0.2 L -0.5,-0.2 Z',
+      scale:10, fillColor:'#ef4444', fillOpacity:1,
+      strokeColor:'#fff', strokeWeight:1.5,
+    },
+    label:{text:'H', fontSize:'9px', fontWeight:'700', color:'#fff'},
+  });
+
+  const buildHospitalPopup = () => {
+    const hosPts = patients.filter(p=>p.hospitalId===hospital.id);
+    const pendingPts  = hosPts.filter(p=>p.status==='pending');
+    const hospitalPts = hosPts.filter(p=>p.status==='hospital');
+    const rows = [
+      ...pendingPts.map(p=>{
+        const n=nurses.find(x=>x.id===p.nurseId);
+        return '<div style="display:flex;align-items:center;gap:5px;padding:3px 0;border-bottom:1px solid #eee">'
+          +'<span style="font-size:12px">🟡</span>'
+          +'<div><div style="font-weight:600;font-size:12px">'+p.name+'</div>'
+          +'<div style="font-size:10px;color:#888">'+(n?n.name:'Unassigned')+' · Pending</div></div></div>';
+      }),
+      ...hospitalPts.map(p=>{
+        const n=nurses.find(x=>x.id===p.nurseId);
+        return '<div style="display:flex;align-items:center;gap:5px;padding:3px 0;border-bottom:1px solid #eee">'
+          +'<span style="font-size:12px">🏥</span>'
+          +'<div><div style="font-weight:600;font-size:12px">'+p.name+'</div>'
+          +'<div style="font-size:10px;color:#888">'+(n?n.name:'Unassigned')+' · Plan to Readmit</div></div></div>';
+      }),
+    ].join('');
+    return '<div style="font-family:sans-serif;padding:6px 4px;min-width:180px;max-width:240px">'
+      +'<div style="font-weight:700;font-size:13px;color:#ef4444;margin-bottom:5px">🏥 '+hospital.name+'</div>'
+      +(rows||'<div style="font-size:11px;color:#aaa">No patients currently here</div>')
+      +'</div>';
+  };
+
+  const iw = new google.maps.InfoWindow();
+  marker.addListener('mouseover',()=>{ iw.setContent(buildHospitalPopup()); iw.open(map,marker); });
+  marker.addListener('mouseout',()=>iw.close());
+  marker.addListener('click',()=>{ iw.setContent(buildHospitalPopup()); iw.open(map,marker); });
+  return marker;
+}
+
+function getOrCreateHospital(placeId, name, address, lat, lng) {
+  let hosp = hospitals.find(h=>h.placeId===placeId);
+  if(!hosp){
+    hosp = {id:'hosp_'+Date.now(), placeId, name, address, lat, lng, marker:null};
+    if(mapsLoaded) hosp.marker = placeHospitalMarker(hosp);
+    hospitals.push(hosp);
+    save();
+  }
+  return hosp;
+}
+
 function placeMasterFacilityMarker(facility) {
   if(!map||!facility.lat||!facility.lng) return null;
   // Color: blend assigned nurses or use neutral purple
@@ -1998,8 +2106,17 @@ function checkMonthlyReset(admitNurse){
 }
 
 // Increment admission count for whoever admitted the patient
-function recordAdmission(admitterId, admitterType){
+function recordAdmission(admitterId, admitterType, isEval){
   if(!admitterId||!admitterType) return;
+  if(isEval){
+    // Evaluation — separate tally, doesn't count as admission
+    if(admitterType==='admit'){
+      const a=admitNurses.find(x=>x.id===admitterId);
+      if(a){checkMonthlyReset(a);a.evalCount=(a.evalCount||0)+1;}
+    }
+    save(); return;
+  }
+  // Full admission
   if(admitterType==='admit'){
     const a=admitNurses.find(x=>x.id===admitterId);
     if(a){checkMonthlyReset(a);a.monthlyCount=(a.monthlyCount||0)+1;a.ytdCount=(a.ytdCount||0)+1;}
@@ -2013,8 +2130,15 @@ function recordAdmission(admitterId, admitterType){
   save();
 }
 
-function removeAdmission(admitterId, admitterType){
+function removeAdmission(admitterId, admitterType, isEval){
   if(!admitterId||!admitterType) return;
+  if(isEval){
+    if(admitterType==='admit'){
+      const a=admitNurses.find(x=>x.id===admitterId);
+      if(a) a.evalCount=Math.max(0,(a.evalCount||0)-1);
+    }
+    save(); return;
+  }
   if(admitterType==='admit'){
     const a=admitNurses.find(x=>x.id===admitterId);
     if(a){a.monthlyCount=Math.max(0,(a.monthlyCount||0)-1);a.ytdCount=Math.max(0,(a.ytdCount||0)-1);}
@@ -2126,11 +2250,11 @@ function makeFacilityMarker(lat,lng,facilityName,nurseId,patientList){
 
 function getStatusIcon(status, nurseColor){
   const color = nurseColor || '#9B89C4';
+  const cfg = STATUS_CONFIG[status];
+  if(cfg && !cfg.showPin) return null;
   switch(status){
+    case 'pending':   return {path:google.maps.SymbolPath.CIRCLE,scale:6,fillColor:'#f9c84f',fillOpacity:0.7,strokeColor:'#d4a017',strokeWeight:1.5};
     case 'hospital':  return {path:google.maps.SymbolPath.CIRCLE,scale:7,fillColor:'#94a3b8',fillOpacity:0.5,strokeColor:'#64748b',strokeWeight:1.5};
-    case 'deceased':  return null; // no pin for deceased
-    case 'transferred':return null; // no pin for transferred
-    case 'discharged': return null; // no pin for discharged
     default:          return {path:google.maps.SymbolPath.CIRCLE,scale:7,fillColor:color,fillOpacity:1,strokeColor:'#fff',strokeWeight:1.5};
   }
 }
@@ -2168,8 +2292,16 @@ function rebuildFacilityMarkers(){
   const facilityGroups={};
   patients.forEach(p=>{
     if(p.locType!=='facility'||!p.lat||!p.lng) return;
-    const key=(p.facilityName||'Unknown Facility')+'|'+Math.round(p.lat*1000)+'|'+Math.round(p.lng*1000);
-    if(!facilityGroups[key]) facilityGroups[key]={name:p.facilityName||'Facility',lat:p.lat,lng:p.lng,nurseId:p.nurseId,patients:[]};
+    // Group by facilityId if available, otherwise by name+coords
+    const key=p.facilityId||(p.facilityName||'Unknown Facility')+'|'+Math.round(p.lat*1000)+'|'+Math.round(p.lng*1000);
+    if(!facilityGroups[key]){
+      const masterFac=p.facilityId?masterFacilities.find(f=>f.id===p.facilityId):null;
+      facilityGroups[key]={
+        name:masterFac?.name||p.facilityName||'Facility',
+        lat:masterFac?.lat||p.lat, lng:masterFac?.lng||p.lng,
+        nurseId:p.nurseId, patients:[]
+      };
+    }
     facilityGroups[key].patients.push(p);
   });
 
@@ -2281,7 +2413,23 @@ function applyViewVisibility(){
   if(!mapsLoaded) return;
   const isAll=currentView==='all';
   nurses.forEach(n=>{if(n.polygon){n.polygon.setVisible(!isAll&&n.zoneKey===currentView&&visible.nurses);}});
-  patients.forEach(p=>{if(p.marker){const nurse=nurses.find(n=>n.id===p.nurseId);p.marker.setVisible(!isAll&&nurse&&nurse.zoneKey===currentView&&visible.patients);}});
+  patients.forEach(p=>{
+    if(!p.marker) return;
+    const nurse=nurses.find(n=>n.id===p.nurseId);
+    const inZone=!isAll&&nurse&&nurse.zoneKey===currentView;
+    const statusVisible=patientViewMode==='all'
+      ? STATUS_CONFIG[p.status||'active']?.showPin!==false
+      : ['active','pending','hospital'].includes(p.status||'active');
+    p.marker.setVisible(inZone&&visible.patients&&statusVisible);
+  });
+  // Hospital pins — show when zone has hospitalized/pending patients
+  hospitals.forEach(h=>{
+    if(!h.marker) return;
+    const hasZonePts=patients.some(p=>p.hospitalId===h.id&&(()=>{
+      const n=nurses.find(x=>x.id===p.nurseId);return n&&n.zoneKey===currentView;
+    })());
+    h.marker.setVisible(!isAll&&hasZonePts);
+  });
   staff.forEach(s=>{if(s.marker)s.marker.setVisible(!isAll&&s.zoneKey===currentView&&!!visible[s.role]);});
   admitNurses.forEach(a=>{if(a.marker)a.marker.setVisible(!isAll&&a.zoneKey===currentView&&!!visible.Admit);});
   // Facility pins from nurse territories
@@ -2437,10 +2585,23 @@ function openAddPatient(){
   document.getElementById('mPatientLocType').value='home';
   document.getElementById('mPatientFacilityRow').style.display='none';
   document.getElementById('mPatientFacilityName').value='';
+  document.getElementById('mPatientFacilityId').value='';
   document.getElementById('mPatientRoom').value='';
   document.getElementById('mPatientStatus').value='active';
   document.getElementById('mPatientReadmit').checked=false;
   document.getElementById('mPatientReadmitHint').style.display='none';
+  document.getElementById('mPatientHospitalRow').style.display='none';
+  document.getElementById('mPatientHospitalId').value='';
+  document.getElementById('mPatientHospitalConfirm').textContent='';
+  document.getElementById('mPatientHospitalNewRow').style.display='none';
+  document.getElementById('mPatientFacilityConfirm').textContent='';
+  document.getElementById('mPatientFacilityNewRow').style.display='none';
+  document.getElementById('mPatientFacilitySearch').value='';
+  // Populate facility dropdown from master list
+  const facSel = document.getElementById('mPatientFacilitySelect');
+  facSel.innerHTML = '<option value="">— Pick from your facility list —</option>'
+    + masterFacilities.map(f=>`<option value="${f.id}">${f.name}</option>`).join('')
+    + '<option value="__new__">+ Add new facility…</option>';
   // Primary nurse dropdown (unchanged)
   const nursePool=currentView==='all'?nurses:nurses.filter(n=>n.zoneKey===currentView);
   const nSel=document.getElementById('mPatientNurse');
@@ -2475,9 +2636,11 @@ function geocodeAndAddPatient(){
   const [admitId, admitterType] = admitRaw ? admitRaw.split('|') : [null,null];
   const locType=document.getElementById('mPatientLocType').value||'home';
   const facilityName=document.getElementById('mPatientFacilityName').value.trim()||null;
+  const facilityId  =document.getElementById('mPatientFacilityId').value.trim()||null;
   const roomNote=document.getElementById('mPatientRoom').value.trim()||null;
   const patientStatus=document.getElementById('mPatientStatus').value||'active';
   const isReadmit=document.getElementById('mPatientReadmit').checked;
+  const hospitalId=document.getElementById('mPatientHospitalId')?.value||null;
   // Nurse: manual assignment takes priority, otherwise auto-detect from territory
   const manualNurseId=document.getElementById('mPatientNurse').value||null;
   if(!name||!addr){showToast('Fill in name and address','err');return;}
@@ -2497,12 +2660,13 @@ function geocodeAndAddPatient(){
       const [nurseIdFinal] = nurseRaw ? nurseRaw.split('|') : [nurseId];
       const obj={id:'p_'+Date.now(),name,address:results[0].formatted_address,lat,lng,
         nurseId:nurseIdFinal||nurseId,admitId,admitterType,admitDate,
-        locType,facilityName,roomNote,
-        status:patientStatus, isReadmit,
+        locType,facilityName,facilityId,roomNote,
+        status:patientStatus, isReadmit, hospitalId,
         marker:null};
       obj.marker=placePatientPin(lat,lng,name,obj.nurseId,locType,facilityName,patientStatus);
-      // Record admission tally — always, even for readmits
-      if(admitId && admitterType) recordAdmission(admitId, admitterType);
+      // Record tally — evaluated patients don't count as admissions
+      const isEval = patientStatus==='evaluated';
+      if(admitId && admitterType) recordAdmission(admitId, admitterType, isEval);
       // Track on nurse card
       const assignedNurse=nurses.find(n=>n.id===obj.nurseId);
       if(assignedNurse && patientStatus==='active'){
@@ -2536,11 +2700,13 @@ function geocodeAndAddPatient(){
 
 // Status labels and colors
 const STATUS_CONFIG = {
-  active:      {label:'Active',              color:'var(--accent2)',  icon:'🟢'},
-  hospital:    {label:'Hospital/Readmit',    color:'#94a3b8',         icon:'🏥'},
-  transferred: {label:'Transferred',         color:'var(--muted)',    icon:'🔄'},
-  discharged:  {label:'Discharged',          color:'var(--muted)',    icon:'📋'},
-  deceased:    {label:'Deceased',            color:'#374151',         icon:'⚫'},
+  pending:     {label:'Pending',             color:'#f9c84f',         icon:'🟡', showPin:true},
+  active:      {label:'Active',              color:'var(--accent2)',  icon:'🟢', showPin:true},
+  hospital:    {label:'Hospital/Readmit',    color:'#94a3b8',         icon:'🏥', showPin:true},
+  evaluated:   {label:'Evaluated',           color:'#a78bfa',         icon:'🔍', showPin:false},
+  transferred: {label:'Transferred',         color:'var(--muted)',    icon:'🔄', showPin:false},
+  discharged:  {label:'Discharged',          color:'var(--muted)',    icon:'📋', showPin:false},
+  deceased:    {label:'Deceased',            color:'#374151',         icon:'⚫', showPin:false},
 };
 
 function updatePatientStatus(id, newStatus){
@@ -2580,7 +2746,7 @@ function deletePatient(id){
   const p=patients[idx];
   if(p.marker)p.marker.setMap(null);
   // Reverse the admission tally
-  if(p.admitId&&p.admitterType) removeAdmission(p.admitId,p.admitterType);
+  if(p.admitId&&p.admitterType) removeAdmission(p.admitId,p.admitterType,p.status==='evaluated');
   patients.splice(idx,1);
   rebuildFacilityMarkers();
   renderAll();save();showToast('Patient removed','ok');
@@ -2589,6 +2755,14 @@ function deletePatient(id){
 // ─── RENDER ──────────────────────────────────────────────
 function renderAll(){
   renderOverview();renderTeamList();renderFacilityList();renderPatientList();renderLegend();updateStats();
+}
+
+function setPatientView(mode){
+  patientViewMode=mode;
+  document.getElementById('pv-active').classList.toggle('active',mode==='active');
+  document.getElementById('pv-all').classList.toggle('active',mode==='all');
+  renderPatientList();
+  applyViewVisibility();
 }
 
 function setTeamFilter(filter){
@@ -2643,7 +2817,7 @@ function renderTeamAddForm(){
       <select id="admitZoneInput" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px;padding:6px 9px;outline:none">
         <option value="">Assign to office zone…</option>
         <option value="atlanta">Atlanta</option>
-        <option value="eastga">East Georgia</option>
+        <option value="eastga" selected>East Georgia</option>
         <option value="augusta">Augusta</option>
       </select>
       <select id="admitTypeInput" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px;padding:6px 9px;outline:none">
@@ -2662,7 +2836,7 @@ function renderTeamAddForm(){
       <select id="nurseZoneInput" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px;padding:6px 9px;outline:none">
         <option value="">Assign to office zone…</option>
         <option value="atlanta">Atlanta</option>
-        <option value="eastga">East Georgia</option>
+        <option value="eastga" selected>East Georgia</option>
         <option value="augusta">Augusta</option>
       </select>
       <select id="nurseTypeInput" onchange="updateNurseColorFromType()" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px;padding:6px 9px;outline:none">
@@ -2730,6 +2904,15 @@ function renderTeamList(){
             <div style="font-size:9px;text-transform:uppercase;color:var(--muted)">YTD</div>
           </div>
         </div>
+        ${(()=>{
+          const readmitCt=patients.filter(p=>p.admitId===m.id&&p.isReadmit).length;
+          const evalCt=m.evalCount||0;
+          if(!readmitCt&&!evalCt) return '';
+          return '<div style="display:flex;gap:6px;margin-top:5px">'
+            +(readmitCt?'<div style="flex:1;background:rgba(249,200,79,.08);border:1px solid rgba(249,200,79,.2);border-radius:7px;padding:4px 8px;text-align:center"><div style="font-family:DM Mono,monospace;font-size:13px;font-weight:600;color:var(--warn)">'+readmitCt+'</div><div style="font-size:9px;color:var(--muted)">Readmits</div></div>':'')
+            +(evalCt?'<div style="flex:1;background:rgba(167,139,250,.08);border:1px solid rgba(167,139,250,.2);border-radius:7px;padding:4px 8px;text-align:center"><div style="font-family:DM Mono,monospace;font-size:13px;font-weight:600;color:#a78bfa">'+evalCt+'</div><div style="font-size:9px;color:var(--muted)">Evals</div></div>':'')
+            +'</div>';
+        })()}
         <div class="card-actions" style="margin-top:6px"><button class="icon-btn del" onclick="deleteAdmit('${m.id}')">✕ Remove</button></div>
       </div>`;
     } else {
@@ -2878,8 +3061,19 @@ function renderStaffList(){
 
 function renderPatientList(){
   const el=document.getElementById('patientList');
-  let filtered=currentView==='all'?patients:patients.filter(p=>{const n=nurses.find(x=>x.id===p.nurseId);return n&&n.zoneKey===currentView;});
-  if(!filtered.length){el.innerHTML='<div class="empty-state">No patients yet.</div>';return;}
+  // Filter by zone
+  let filtered=currentView==='all'?patients:patients.filter(p=>{
+    const n=nurses.find(x=>x.id===p.nurseId);
+    return n&&n.zoneKey===currentView;
+  });
+  // Filter by view mode — active shows current service patients only
+  if(patientViewMode==='active'){
+    filtered=filtered.filter(p=>['active','pending','hospital'].includes(p.status||'active'));
+  }
+  if(!filtered.length){
+    el.innerHTML='<div class="empty-state">'+(patientViewMode==='active'?'No active patients.':'No patients for this year.')+'</div>';
+    return;
+  }
   el.innerHTML=filtered.map(p=>{
     const nurse=nurses.find(n=>n.id===p.nurseId);
     const admit=admitNurses.find(a=>a.id===p.admitId);
@@ -2961,7 +3155,8 @@ function updateStats(){
   // Refresh team list if visible
   if(activeTab==='team') renderTeamList();
   document.getElementById('stPatients').textContent=zp.length;
-  document.getElementById('stUnassigned').textContent=patients.filter(p=>!p.nurseId).length;
+  const pendingCount=patients.filter(p=>p.status==='pending'||(!p.nurseId&&p.status!=='evaluated')).length;
+  document.getElementById('stUnassigned').textContent=pendingCount;
 }
 
 // ─── UI HELPERS ──────────────────────────────────────────
@@ -3009,12 +3204,205 @@ function updateOfficeLocation(zoneKey, address, lat, lng) {
   placeOfficeMarkers();
   showToast(OFFICE_ZONES[zoneKey].label+' office updated','ok');
 }
-// Show/hide facility name field based on location type
+// Show/hide hospital row based on status selection
 document.addEventListener('change', e=>{
-  if(e.target.id==='mPatientLocType'){
-    document.getElementById('mPatientFacilityRow').style.display = e.target.value==='facility'?'':'none';
+  if(e.target.id==='mPatientStatus'){
+    const val = e.target.value;
+    const hospRow = document.getElementById('mPatientHospitalRow');
+    if(hospRow){
+      hospRow.style.display = (val==='hospital'||val==='pending_hospital') ? '' : 'none';
+      if(val==='hospital'||val==='pending_hospital') populateHospitalDropdown();
+    }
   }
 });
+
+// Show/hide facility row based on location type
+document.addEventListener('change', e=>{
+  if(e.target.id==='mPatientLocType'){
+    const show = e.target.value==='facility';
+    document.getElementById('mPatientFacilityRow').style.display = show?'':'none';
+    if(show){
+      // Refresh facility dropdown
+      const facSel=document.getElementById('mPatientFacilitySelect');
+      facSel.innerHTML='<option value="">— Pick from your facility list —</option>'
+        +masterFacilities.map(f=>`<option value="${f.id}">${f.name}</option>`).join('')
+        +'<option value="__new__">+ Add new facility…</option>';
+    }
+  }
+});
+
+function onPatientFacilitySelect(val){
+  const newRow    = document.getElementById('mPatientFacilityNewRow');
+  const confirmEl = document.getElementById('mPatientFacilityConfirm');
+  const nameHidden= document.getElementById('mPatientFacilityName');
+  const idHidden  = document.getElementById('mPatientFacilityId');
+  const addrInput = document.getElementById('mPatientAddr');
+
+  if(val==='__new__'){
+    newRow.style.display='';
+    confirmEl.textContent='';
+    nameHidden.value='';
+    idHidden.value='';
+    return;
+  }
+  newRow.style.display='none';
+  if(!val){ confirmEl.textContent=''; nameHidden.value=''; idHidden.value=''; return; }
+
+  const f = masterFacilities.find(x=>x.id===val);
+  if(!f) return;
+  nameHidden.value = f.name;
+  idHidden.value   = f.id;
+  // Auto-fill address field with facility address
+  if(f.address) addrInput.value = f.address;
+  confirmEl.textContent = '✓ '+f.name+(f.address?' · '+f.address:'');
+  confirmEl.style.color = 'var(--accent2)';
+}
+
+function populateHospitalDropdown(){
+  const sel = document.getElementById('mPatientHospitalSelect');
+  if(!sel) return;
+  sel.innerHTML = '<option value="">— Select hospital —</option>'
+    + hospitals.map(h=>`<option value="${h.id}">${h.name}</option>`).join('')
+    + '<option value="__new__">+ Search for hospital…</option>';
+}
+
+function onHospitalSelectChange(val){
+  const newRow = document.getElementById('mPatientHospitalNewRow');
+  const confirmEl = document.getElementById('mPatientHospitalConfirm');
+  const idHidden = document.getElementById('mPatientHospitalId');
+  if(val==='__new__'){
+    newRow.style.display='';
+    confirmEl.textContent='';
+    idHidden.value='';
+    return;
+  }
+  newRow.style.display='none';
+  if(!val){confirmEl.textContent='';idHidden.value='';return;}
+  const h=hospitals.find(x=>x.id===val);
+  if(h){idHidden.value=h.id;confirmEl.textContent='✓ '+h.name;confirmEl.style.color='var(--accent2)';}
+}
+
+function searchHospital(){
+  if(!mapsLoaded||!google.maps.places) return;
+  const input=document.getElementById('mPatientHospitalSearch');
+  const suggestBox=document.getElementById('mPatientHospitalSuggestions');
+  const val=input.value.trim();
+  if(!val){suggestBox.style.display='none';return;}
+  const svc=new google.maps.places.AutocompleteService();
+  svc.getPlacePredictions({
+    input:val+' hospital',
+    location:new google.maps.LatLng(33.0,-83.5),
+    radius:300000,
+    types:['hospital','establishment'],
+  },(predictions,status)=>{
+    if(status!=='OK'||!predictions){suggestBox.style.display='none';return;}
+    suggestBox.innerHTML=predictions.map(p=>
+      `<div onclick="selectHospital('${p.place_id}','${(p.structured_formatting?.main_text||p.description).replace(/'/g,'&apos;')}')"
+        style="padding:8px 10px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border);transition:background .15s"
+        onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+        <div style="font-weight:500">${p.structured_formatting?.main_text||p.description}</div>
+        <div style="font-size:10px;color:var(--muted)">${p.structured_formatting?.secondary_text||''}</div>
+      </div>`
+    ).join('');
+    suggestBox.style.display='block';
+  });
+}
+
+function selectHospital(placeId, name){
+  if(!mapsLoaded||!google.maps.places) return;
+  const svc=new google.maps.places.PlacesService(map);
+  svc.getDetails({placeId,fields:['name','geometry','formatted_address']},(place,status)=>{
+    if(status!=='OK'||!place){showToast('Could not find hospital','err');return;}
+    const hosp=getOrCreateHospital(placeId,place.name,place.formatted_address,
+      place.geometry.location.lat(),place.geometry.location.lng());
+    document.getElementById('mPatientHospitalId').value=hosp.id;
+    document.getElementById('mPatientHospitalConfirm').textContent='✓ '+hosp.name;
+    document.getElementById('mPatientHospitalConfirm').style.color='var(--accent2)';
+    document.getElementById('mPatientHospitalSearch').value='';
+    document.getElementById('mPatientHospitalSuggestions').style.display='none';
+    document.getElementById('mPatientHospitalNewRow').style.display='none';
+    // Refresh dropdown
+    populateHospitalDropdown();
+    document.getElementById('mPatientHospitalSelect').value=hosp.id;
+  });
+}
+
+function searchPatientFacility(){
+  if(!mapsLoaded||!google.maps.places) return;
+  const input=document.getElementById('mPatientFacilitySearch');
+  const suggestBox=document.getElementById('mPatientFacilitySuggestions');
+  const val=input.value.trim();
+  if(!val){suggestBox.style.display='none';return;}
+  const svc=new google.maps.places.AutocompleteService();
+  svc.getPlacePredictions({
+    input:val,
+    location:new google.maps.LatLng(33.0,-83.5),
+    radius:300000,
+    types:['establishment','geocode'],
+  },(predictions,status)=>{
+    if(status!=='OK'||!predictions){suggestBox.style.display='none';return;}
+    suggestBox.innerHTML=predictions.map(p=>
+      `<div onclick="selectPatientNewFacility('${p.place_id}','${(p.structured_formatting?.main_text||p.description).replace(/'/g,'&apos;')}')"
+        style="padding:8px 10px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border);transition:background .15s"
+        onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+        <div style="font-weight:500">${p.structured_formatting?.main_text||p.description}</div>
+        <div style="font-size:10px;color:var(--muted)">${p.structured_formatting?.secondary_text||''}</div>
+      </div>`
+    ).join('');
+    suggestBox.style.display='block';
+  });
+}
+
+function selectPatientNewFacility(placeId, name){
+  if(!mapsLoaded||!google.maps.places) return;
+  const svc=new google.maps.places.PlacesService(map);
+  svc.getDetails({placeId,fields:['name','geometry','formatted_address']},(place,status)=>{
+    if(status!=='OK'||!place){showToast('Could not find facility','err');return;}
+    // Add to master facility list automatically
+    const existing=masterFacilities.find(f=>f.placeId===placeId);
+    if(existing){
+      // Already exists — just select it
+      document.getElementById('mPatientFacilityName').value=existing.name;
+      document.getElementById('mPatientFacilityId').value=existing.id;
+      document.getElementById('mPatientAddr').value=existing.address;
+      document.getElementById('mPatientFacilityConfirm').textContent='✓ '+existing.name;
+      document.getElementById('mPatientFacilityNewRow').style.display='none';
+      document.getElementById('mPatientFacilitySearch').value='';
+      document.getElementById('mPatientFacilitySuggestions').style.display='none';
+      // Update dropdown
+      const facSel=document.getElementById('mPatientFacilitySelect');
+      facSel.value=existing.id;
+      return;
+    }
+    // New facility — add to master list
+    const newFac={
+      id:'fac_'+Date.now(),
+      placeId, name:place.name,
+      address:place.formatted_address,
+      lat:place.geometry.location.lat(),
+      lng:place.geometry.location.lng(),
+      nurseIds:[], census:0, marker:null,
+    };
+    newFac.marker=placeMasterFacilityMarker(newFac);
+    masterFacilities.push(newFac);
+    save();
+    // Now select it
+    document.getElementById('mPatientFacilityName').value=newFac.name;
+    document.getElementById('mPatientFacilityId').value=newFac.id;
+    document.getElementById('mPatientAddr').value=newFac.address;
+    document.getElementById('mPatientFacilityConfirm').textContent='✓ '+newFac.name+' (added to master list)';
+    document.getElementById('mPatientFacilitySearch').value='';
+    document.getElementById('mPatientFacilitySuggestions').style.display='none';
+    document.getElementById('mPatientFacilityNewRow').style.display='none';
+    // Refresh dropdown with new facility
+    const facSel=document.getElementById('mPatientFacilitySelect');
+    facSel.innerHTML='<option value="">— Pick from your facility list —</option>'
+      +masterFacilities.map(f=>`<option value="${f.id}" ${f.id===newFac.id?'selected':''}>${f.name}</option>`).join('')
+      +'<option value="__new__">+ Add new facility…</option>';
+    showToast(newFac.name+' added to facilities','ok');
+    applyViewVisibility();
+  });
+}
 
 // Auto-detect readmission when patient name is typed
 document.addEventListener('input', e=>{
