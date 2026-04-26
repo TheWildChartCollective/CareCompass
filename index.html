@@ -367,24 +367,40 @@ header{display:flex;align-items:center;justify-content:space-between;padding:9px
 <!-- NURSE TERRITORY MODAL -->
 <div class="modal-overlay" id="nurseTerritoryModal">
   <div class="modal" style="width:500px">
-    <h3 id="ntModalTitle">Set Territory</h3>
-    <p class="subtitle" id="ntModalSubtitle">Select counties and/or cities that make up this nurse's territory</p>
-    <div style="display:flex;gap:7px;margin-bottom:8px">
+    <h3 id="ntModalTitle">✎ Edit</h3>
+    <p class="subtitle" id="ntModalSubtitle">Update info and territory</p>
+    <div style="display:flex;gap:7px;margin-bottom:6px">
       <div style="flex:1">
-        <div class="field-label" style="margin-top:0;margin-bottom:3px">Type:</div>
+        <div class="field-label" style="margin-top:0;margin-bottom:3px">Role:</div>
         <select id="ntTypeInput" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:5px 8px;outline:none">
-          <option value="RN">Full Time RN</option>
-          <option value="PRN">PRN RN</option>
-          <option value="LPN">LPN</option>
-          <option value="Supervisor">Clinical Supervisor (CM)</option>
-          <option value="Director">Director</option>
+          <optgroup label="Case Manager">
+            <option value="RN">Case Manager (RN)</option>
+            <option value="LPN">Case Manager (LPN)</option>
+            <option value="Supervisor">⭐ Supervisor</option>
+            <option value="Director">👑 Director</option>
+          </optgroup>
+          <optgroup label="Move to...">
+            <option value="ADMIT_FT">→ Admit RN (FT)</option>
+            <option value="ADMIT_PRN">→ Admit RN (PRN)</option>
+            <option value="ONCALL">→ 🌙 On-Call RN</option>
+          </optgroup>
         </select>
       </div>
       <div style="flex:1">
-        <div class="field-label" style="margin-top:0;margin-bottom:3px">Credentials:</div>
-        <input type="text" id="ntCredsInput" placeholder="BSN, RN, CHPN…"
-          style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:5px 8px;outline:none"/>
+        <div class="field-label" style="margin-top:0;margin-bottom:3px">Status:</div>
+        <select id="ntStatusInput" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:5px 8px;outline:none">
+          <option value="active">✅ Active</option>
+          <option value="parttime">🕐 Part Time</option>
+          <option value="prn">📋 PRN</option>
+          <option value="loa">⏸️ Leave of Absence</option>
+          <option value="inactive">🌿 Alumni</option>
+        </select>
       </div>
+    </div>
+    <div style="margin-bottom:8px">
+      <div class="field-label" style="margin-top:0;margin-bottom:3px">Credentials / Title:</div>
+      <input type="text" id="ntCredsInput" placeholder="BSN, RN, CHPN, Clinical Supervisor…"
+        style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:5px 8px;outline:none"/>
     </div>
     <div style="display:flex;gap:8px;margin-bottom:10px;padding:9px 10px;background:var(--bg);border-radius:8px;border:1px solid var(--border)">
       <div style="flex:1">
@@ -1494,6 +1510,8 @@ function openNurseTerrModal(existingNurseId) {
   const globalLabel= document.getElementById('ntGlobalThresh');
   if(typeInput)  typeInput.value  = nurse?.nurseType  || document.getElementById('nurseTypeInput')?.value || 'RN';
   if(credsInput) credsInput.value = nurse?.credentials || document.getElementById('nurseCredsInput')?.value || '';
+  const statusInput2 = document.getElementById('ntStatusInput');
+  if(statusInput2) statusInput2.value = nurse?.employmentStatus || 'active';
   if(homeInput)  homeInput.value  = nurse?.homeAddress || '';
   if(distInput)  distInput.value  = nurse?.distanceThreshold || '';
   if(globalLabel) globalLabel.textContent = globalDistanceThreshold;
@@ -2105,15 +2123,19 @@ function saveNurseTerritory() {
     const preGeoLng   = homeInput?._selectedLng||null;
     const preGeoAddr  = homeInput?._selectedAddr||null;
     const distOverride= parseInt(document.getElementById('ntDistanceInput')?.value)||null;
-    const nurseType   = document.getElementById('ntTypeInput')?.value || 'RN';
-    const credentials = document.getElementById('ntCredsInput')?.value.trim()||'';
-    const typeColor   = getNurseColor(nurseType);
+    const nurseTypeRaw = document.getElementById('ntTypeInput')?.value || 'RN';
+    const credentials  = document.getElementById('ntCredsInput')?.value.trim()||'';
+    const newStatus    = document.getElementById('ntStatusInput')?.value || 'active';
+    // Handle "Move to..." role changes
+    const isMoveToAdmit = ['ADMIT_FT','ADMIT_PRN','ONCALL'].includes(nurseTypeRaw);
+    const nurseType    = isMoveToAdmit ? 'RN' : nurseTypeRaw; // keep for new nurse, role change handled after save
+    const typeColor    = getNurseColor(nurseType);
     const newNurse={
       id:'n_'+Date.now(),
       name:pendingItem.name,
       color:typeColor,
       nurseType, credentials,
-      employmentStatus:'active',
+      employmentStatus:newStatus,
       zoneKey:pendingItem.zoneKey,
       counties:pendingTerrCounties,
       cities:pendingTerrCities,
@@ -2148,6 +2170,7 @@ function saveNurseTerritory() {
       const credentials=document.getElementById('ntCredsInput')?.value.trim()||'';
       nurse.nurseType=nurseType;
       nurse.credentials=credentials;
+      nurse.employmentStatus=newStatus;
       nurse.color=getNurseColor(nurseType);
       nurse.distanceThreshold=distOverride;
       if(homeAddr !== nurse.homeAddress){
@@ -2167,11 +2190,15 @@ function saveNurseTerritory() {
       if(marker) savedNurse.facilityMarkers.push(marker);
     });
   }
+  // Handle role change to admit/oncall
+  if(isMoveToAdmit && nurse){
+    changeNurseRole(nurse.id, nurseTypeRaw);
+  }
   highlightNurseCounties();
   renderAll(); save();
   closeModal('nurseTerritoryModal');
   pendingItem=null;
-  showToast('Territory saved ✓','ok');
+  showToast('Saved ✓','ok');
 }
 
 // ─── MANUAL DRAW ─────────────────────────────────────────
@@ -3299,29 +3326,9 @@ function renderTeamList(){
             +(evalCt?'<div style="flex:1;background:rgba(167,139,250,.08);border:1px solid rgba(167,139,250,.2);border-radius:7px;padding:4px 8px;text-align:center"><div style="font-family:DM Mono,monospace;font-size:13px;font-weight:600;color:#a78bfa">'+evalCt+'</div><div style="font-size:9px;color:var(--muted)">Evals</div></div>':'')
             +'</div>';
         })()}
-        <div style="display:flex;gap:5px;margin-top:6px;align-items:center">
-          <select onchange="changeAdmitRole('${m.id}',this.value)"
-            style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:10px;padding:3px 5px;outline:none;cursor:pointer"
-            title="Role">
-            <optgroup label="Admit / On-Call">
-              <option value="ADMIT_FT" ${(!m.admitType||m.admitType==='FullTime'||m.admitType==='ADMIT_FT')?'selected':''}>Admit RN (FT)</option>
-              <option value="ADMIT_PRN" ${(m.admitType==='PRN'||m.admitType==='ADMIT_PRN')?'selected':''}>Admit RN (PRN)</option>
-              <option value="ONCALL" ${(m.admitType==='OnCall'||m.admitType==='ONCALL')?'selected':''}>🌙 On-Call RN</option>
-            </optgroup>
-            <optgroup label="Move to Case Manager...">
-              <option value="__cm_rn__">→ Case Manager (RN)</option>
-              <option value="__cm_lpn__">→ Case Manager (LPN)</option>
-              <option value="__cm_sup__">→ ⭐ Supervisor</option>
-              <option value="__cm_dir__">→ 👑 Director</option>
-            </optgroup>
-          </select>
-          <select onchange="updateAdmitEmployment('${m.id}',this.value)"
-            style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:${!m.employmentStatus||m.employmentStatus==='active'?'var(--text)':'var(--muted)'};font-size:10px;padding:3px 5px;outline:none;cursor:pointer"
-            title="Status">
-            ${Object.entries(EMPLOYMENT_STATUS).map(([k,v])=>`<option value="${k}" ${(m.employmentStatus||'active')===k?'selected':''}>${v.icon} ${v.label}</option>`).join('')}
-          </select>
-          <button class="icon-btn" onclick="openEditAdmit('${m.id}')" style="padding:3px 6px;font-size:11px">✎ Edit</button>
-          <button class="icon-btn del" onclick="deleteAdmit('${m.id}')" style="padding:3px 6px;font-size:11px">✕</button>
+        <div class="card-actions" style="margin-top:6px">
+          <button class="icon-btn" onclick="openEditAdmit('${m.id}')">✎ Edit</button>
+          <button class="icon-btn del" onclick="deleteAdmit('${m.id}')">✕ Remove</button>
         </div>
       </div>`;
     } else {
@@ -3340,32 +3347,8 @@ function renderTeamList(){
         ${(m.admitMonthly||m.admitYTD)?'<div style="font-size:10px;color:#60a5fa;margin-top:2px">📋 '+(m.admitMonthly||0)+' this month | '+(m.admitYTD||0)+' YTD</div>':''}
         <div style="font-size:10px;color:${OFFICE_ZONES[m.zoneKey]?.color||'var(--muted)'};margin-top:2px">${OFFICE_ZONES[m.zoneKey]?.label||m.zoneKey}</div>
         ${allAreas.length?'<div class="tag-pills">'+allAreas.slice(0,5).map(a=>'<span class="tpill">'+a+'</span>').join('')+(allAreas.length>5?'<span class="tpill">+'+(allAreas.length-5)+' more</span>':'')+'</div>':''}
-        <div style="display:flex;gap:4px;margin-top:5px;align-items:center">
-          <select onchange="changeNurseRole('${m.id}',this.value);event.stopPropagation()"
-            onclick="event.stopPropagation()"
-            style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:10px;padding:3px 5px;outline:none;cursor:pointer"
-            title="Role">
-            <optgroup label="Case Manager">
-              <option value="CM_RN" ${(!m.nurseType||m.nurseType==='RN'||m.nurseType==='CM_RN')?'selected':''}>Case Manager (RN)</option>
-              <option value="CM_LPN" ${(m.nurseType==='LPN'||m.nurseType==='CM_LPN')?'selected':''}>Case Manager (LPN)</option>
-              <option value="CM_SUP" ${(m.nurseType==='Supervisor'||m.nurseType==='CM_SUP')?'selected':''}>⭐ Supervisor</option>
-              <option value="CM_DIR" ${(m.nurseType==='Director'||m.nurseType==='CM_DIR')?'selected':''}>👑 Director</option>
-            </optgroup>
-            <optgroup label="Move to...">
-              <option value="ADMIT_FT">→ Admit RN (FT)</option>
-              <option value="ADMIT_PRN">→ Admit RN (PRN)</option>
-              <option value="ONCALL">→ 🌙 On-Call RN</option>
-            </optgroup>
-          </select>
-          <select onchange="updateNurseEmployment('${m.id}',this.value);event.stopPropagation()"
-            onclick="event.stopPropagation()"
-            style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:${!m.employmentStatus||m.employmentStatus==='active'?'var(--text)':'var(--muted)'};font-size:10px;padding:3px 5px;outline:none;cursor:pointer"
-            title="Status">
-            ${Object.entries(EMPLOYMENT_STATUS).map(([k,v])=>`<option value="${k}" ${(m.employmentStatus||'active')===k?'selected':''}>${v.icon} ${v.label}</option>`).join('')}
-          </select>
-        </div>
         <div class="card-actions">
-          <button class="icon-btn" onclick="event.stopPropagation();openNurseTerrModal('${m.id}')">${hasTerr?'✎ Edit':'📍 Set Territory'}</button>
+          <button class="icon-btn" onclick="event.stopPropagation();openNurseTerrModal('${m.id}')">✎ Edit</button>
           <button class="icon-btn del" onclick="event.stopPropagation();deleteNurse('${m.id}')">✕</button>
         </div>
       </div>`;
