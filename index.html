@@ -597,16 +597,44 @@ const NURSE_COLORS = {
 const NURSE_BASE_COLOR     = '#9B89C4'; // fallback lavender
 const NURSE_SELECTED_COLOR = '#6B3FA0'; // bright purple when selected
 
+const EMPLOYMENT_STATUS = {
+  active:   {label:'Active',          icon:'✅'},
+  parttime: {label:'Part Time',       icon:'🕐'},
+  prn:      {label:'PRN',             icon:'📋'},
+  loa:      {label:'Leave of Absence',icon:'🌙'},
+  inactive: {label:'Alumni',          icon:'🌿'},
+};
+
 const ADMIT_COLORS = {
   'FullTime': '#60a5fa', // light blue — Full Time admit RN
   'PRN':      '#3b82f6', // mid blue — PRN admit RN
   'OnCall':   '#1e3a8a', // deep navy — On-Call 🌙
 };
 const ADMIT_LABELS = {
-  'FullTime': 'Full Time RN',
-  'PRN':      'PRN RN',
-  'OnCall':   '🌙 On-Call',
+  'FullTime': 'Admit RN (FT)',
+  'PRN':      'Admit RN (PRN)',
+  'OnCall':   '🌙 On-Call RN',
 };
+
+// ─── UNIFIED ROLE CONFIG ─────────────────────────────────────
+const ROLES_CONFIG = {
+  'CM_RN':    { label:'Case Manager (RN)',  color:'#9B89C4', category:'cm',     badge:'RN',        badgeBg:'#9B89C4' },
+  'CM_LPN':   { label:'Case Manager (LPN)', color:'#B8A0C8', category:'cm',     badge:'LPN',       badgeBg:'#B8A0C8' },
+  'CM_SUP':   { label:'Supervisor',         color:'#5C3D8F', category:'cm',     badge:'⭐ SUP',    badgeBg:'#5C3D8F' },
+  'CM_DIR':   { label:'Director',           color:'#3B2060', category:'cm',     badge:'👑 DIR',    badgeBg:'#3B2060' },
+  'ADMIT_FT': { label:'Admit RN (FT)',      color:'#60a5fa', category:'admit',  badge:'Admit FT',  badgeBg:'#60a5fa' },
+  'ADMIT_PRN':{ label:'Admit RN (PRN)',     color:'#3b82f6', category:'admit',  badge:'Admit PRN', badgeBg:'#3b82f6' },
+  'ONCALL':   { label:'On-Call RN',         color:'#1e3a8a', category:'oncall', badge:'🌙 On-Call',badgeBg:'#1e3a8a' },
+};
+
+function getRoleConfig(roleKey) {
+  if(ROLES_CONFIG[roleKey]) return ROLES_CONFIG[roleKey];
+  const legacyMap = {'RN':'CM_RN','LPN':'CM_LPN','PRN':'CM_RN','Supervisor':'CM_SUP','Director':'CM_DIR','FullTime':'ADMIT_FT','OnCall':'ONCALL'};
+  return ROLES_CONFIG[legacyMap[roleKey]] || ROLES_CONFIG['CM_RN'];
+}
+function getRoleColor(roleKey){ return getRoleConfig(roleKey).color; }
+function getRoleCategory(roleKey){ return getRoleConfig(roleKey).category; }
+function isActiveEmployee(p){ return !p.employmentStatus||['active','parttime','prn'].includes(p.employmentStatus); }
 
 function getNurseColor(type) {
   return NURSE_COLORS[type] || NURSE_COLORS['RN'];
@@ -689,7 +717,7 @@ function save() {
     zoneCounties,
     hospitals:        hospitals.map(h=>({id:h.id,name:h.name,address:h.address,lat:h.lat,lng:h.lng,placeId:h.placeId})),
     masterFacilities: masterFacilities.map(f=>({id:f.id,name:f.name,address:f.address,lat:f.lat,lng:f.lng,placeId:f.placeId,nurseIds:f.nurseIds,census:f.census||0})),
-    nurses:      nurses.map(n=>({id:n.id,name:n.name,color:n.color,nurseType:n.nurseType||'RN',credentials:n.credentials||'',zoneKey:n.zoneKey,counties:n.counties,cities:n.cities,facilities:n.facilities||[],path:n.path,homeAddress:n.homeAddress||'',homeLat:n.homeLat||null,homeLng:n.homeLng||null,distanceThreshold:n.distanceThreshold||null})),
+    nurses:      nurses.map(n=>({id:n.id,name:n.name,color:n.color,nurseType:n.nurseType||'RN',credentials:n.credentials||'',employmentStatus:n.employmentStatus||'active',zoneKey:n.zoneKey,counties:n.counties,cities:n.cities,facilities:n.facilities||[],path:n.path,homeAddress:n.homeAddress||'',homeLat:n.homeLat||null,homeLng:n.homeLng||null,distanceThreshold:n.distanceThreshold||null})),
     globalDistanceThreshold,
     admitNurses: admitNurses.map(a=>({id:a.id,name:a.name,admitType:a.admitType||'FullTime',zoneKey:a.zoneKey,lat:a.lat,lng:a.lng,address:a.address,monthlyCount:a.monthlyCount||0,ytdCount:a.ytdCount||0,evalCount:a.evalCount||0,lastResetMonth:a.lastResetMonth,lastResetYear:a.lastResetYear})),
     staff:       staff.map(s=>({id:s.id,name:s.name,role:s.role,zoneKey:s.zoneKey,nurseIds:s.nurseIds,lat:s.lat,lng:s.lng,address:s.address})),
@@ -838,11 +866,20 @@ window.initMap=function(){
   setStatus('Georgia overview — assign counties to zones using the Overview tab, then click a zone to drill in');
   placeOfficeMarkers();
   loadSaved();
-  // Default to preferred office view
-  setTimeout(()=>{
+  // Default to preferred office view — wait for GeoJSON to load
+  const _trySetDefaultView = (attempts=0) => {
     const pref = getPreferredOffice();
-    setView(pref);
-  }, 500);
+    const assigned = zoneCounties[pref]||[];
+    // Check if counties are loaded
+    let countiesLoaded = false;
+    map.data.forEach(f=>{ if(f.getProperty('countyName')) countiesLoaded=true; });
+    if(countiesLoaded || attempts > 10){
+      setView(pref);
+    } else {
+      setTimeout(()=>_trySetDefaultView(attempts+1), 400);
+    }
+  };
+  setTimeout(_trySetDefaultView, 600);
 };
 
 
@@ -1166,8 +1203,8 @@ function placeHomeMarker(lat,lng,nurse) {
     position:{lat,lng}, map, zIndex:18, visible:false, title:nurse.name+' (Home)',
     icon:{
       path:google.maps.SymbolPath.CIRCLE,
-      scale:7, fillColor:'#ffffff', fillOpacity:1,
-      strokeColor:nurse.color||NURSE_BASE_COLOR, strokeWeight:2.5,
+      scale:4, fillColor:'#ffffff', fillOpacity:1,
+      strokeColor:nurse.color||NURSE_BASE_COLOR, strokeWeight:2,
     }
   });
   const iw=new google.maps.InfoWindow({content:
@@ -2015,6 +2052,7 @@ function saveNurseTerritory() {
       name:pendingItem.name,
       color:typeColor,
       nurseType, credentials,
+      employmentStatus:'active',
       zoneKey:pendingItem.zoneKey,
       counties:pendingTerrCounties,
       cities:pendingTerrCities,
@@ -2194,7 +2232,7 @@ function getMarkerIcon(role,color){
   const c=color||ROLES[role]?.color||'#fff';
   const base={fillColor:c,fillOpacity:1,strokeColor:'#fff',strokeWeight:1.5};
   switch(role){
-    case 'Admit':      return {...base,path:google.maps.SymbolPath.CIRCLE,scale:9,fillColor:'#ffffff',strokeColor:color,strokeWeight:2.5};
+    case 'Admit':      return {...base,path:google.maps.SymbolPath.CIRCLE,scale:5,fillColor:'#ffffff',strokeColor:color||'#60a5fa',strokeWeight:2.5};
     case 'Supervisor': return {...base,path:'M 0,-1 L 0.225,-0.309 L 0.951,-0.309 L 0.363,0.118 L 0.588,0.809 L 0,-0.236 L -0.588,0.809 L -0.363,0.118 L -0.951,-0.309 L -0.225,-0.309 Z',scale:11};
     case 'HCA':        return {...base,path:'M -1,-1 L 1,-1 L 1,1 L -1,1 Z',scale:7};
     case 'Clergy':     return {...base,path:'M 0,-1.1 L 0.95,0.55 L -0.95,0.55 Z',scale:9};
@@ -2363,9 +2401,10 @@ function applyFacilityMarkerVisibility(){
   });
 }
 
-function placeStaffPin(lat,lng,name,role){
+function placeStaffPin(lat,lng,name,role,colorOverride){
   if(!map||!lat||!lng) return null;
-  const marker=new google.maps.Marker({position:{lat,lng},map,title:name,zIndex:15,visible:false,icon:getMarkerIcon(role)});
+  const icon = colorOverride ? getMarkerIcon(role,colorOverride) : getMarkerIcon(role);
+  const marker=new google.maps.Marker({position:{lat,lng},map,title:name,zIndex:15,visible:false,icon});
   const iw=new google.maps.InfoWindow({content:`<div style="font-family:sans-serif;font-size:13px;padding:3px"><strong>${name}</strong><br><span style="color:#888;font-size:11px">${ROLES[role]?.label||role}</span></div>`});
   marker.addListener('click',()=>iw.open(map,marker));
   return marker;
@@ -2424,8 +2463,15 @@ function setView(viewKey){
           if(!assigned.includes(n)) return;
           feature.getGeometry().forEachLatLng(latlng=>{bounds.extend(latlng);boundsSet=true;});
         });
-        if(boundsSet){setTimeout(()=>map.fitBounds(bounds,60),250);}
-        else {map.setCenter(zone.center);map.setZoom(zone.zoom);}
+        if(boundsSet){
+          setTimeout(()=>{
+            map.fitBounds(bounds, {top:40,right:40,bottom:40,left:40});
+            // Retry in case tiles weren't loaded yet
+            setTimeout(()=>{
+              if(map.getZoom()>10) map.setZoom(9);
+            }, 500);
+          }, 350);
+        } else {map.setCenter(zone.center);map.setZoom(zone.zoom);}
       } else {
         map.setCenter(zone.center);map.setZoom(zone.zoom);
       }
@@ -2508,6 +2554,101 @@ function selectNurse(id){
   highlightNurseCounties();
 }
 
+// Move a case manager to admit/on-call or change their CM type
+function changeNurseRole(id, newRole){
+  if(!newRole || newRole === (nurses.find(n=>n.id===id)?.nurseType||'RN')) return;
+  const n = nurses.find(x=>x.id===id); if(!n) return;
+
+  if(newRole==='ADMIT_FT'||newRole==='ADMIT_PRN'||newRole==='ONCALL'){
+    // Moving to admit/on-call list
+    const admitTypeMap = {'ADMIT_FT':'FullTime','ADMIT_PRN':'PRN','ONCALL':'OnCall'};
+    const newAdmitType = admitTypeMap[newRole];
+    const now = new Date();
+    // Create admit nurse record carrying over history
+    const newAdmit = {
+      id: n.id, // keep same ID so patient records still link
+      name: n.name, admitType: newAdmitType,
+      employmentStatus: n.employmentStatus||'active',
+      zoneKey: n.zoneKey, lat: n.homeLat, lng: n.homeLng,
+      address: n.homeAddress||'',
+      monthlyCount: n.admitMonthly||0, ytdCount: n.admitYTD||0, evalCount: 0,
+      lastResetMonth: now.getMonth(), lastResetYear: now.getFullYear(),
+      marker: null,
+    };
+    if(newAdmit.lat && newAdmit.lng)
+      newAdmit.marker = placeStaffPin(newAdmit.lat,newAdmit.lng,newAdmit.name,'Admit',getAdmitColor(newAdmitType));
+    // Remove from nurses, remove home marker
+    if(n.homeMarker){ n.homeMarker.setMap(null); }
+    if(n.polygon){ n.polygon.setMap(null); }
+    nurses.splice(nurses.findIndex(x=>x.id===id),1);
+    admitNurses.push(newAdmit);
+    showToast(n.name+' moved to '+ADMIT_LABELS[newAdmitType],'ok');
+  } else {
+    // Just changing CM subtype
+    const roleMap={'CM_RN':'RN','CM_LPN':'LPN','CM_SUP':'Supervisor','CM_DIR':'Director'};
+    n.nurseType = roleMap[newRole]||newRole;
+    n.color = getRoleConfig(newRole).color || getNurseColor(n.nurseType);
+    showToast(n.name+' → '+getRoleConfig(newRole).label,'ok');
+  }
+  renderTeamList(); save(); applyCountyColors(); highlightNurseCounties();
+}
+
+// Move an admit nurse to case manager or change their admit type
+function changeAdmitRole(id, newRole){
+  if(!newRole) return;
+  const a = admitNurses.find(x=>x.id===id); if(!a) return;
+
+  if(newRole.startsWith('__cm_')){
+    const typeMap = {__cm_rn__:'RN',__cm_lpn__:'LPN',__cm_sup__:'Supervisor',__cm_dir__:'Director'};
+    const newType = typeMap[newRole];
+    const newNurse = {
+      id: a.id, // keep same ID
+      name: a.name, color: getNurseColor(newType),
+      nurseType: newType, credentials: '',
+      employmentStatus: a.employmentStatus||'active',
+      zoneKey: a.zoneKey,
+      counties:[], cities:[], facilities:[],
+      homeAddress: a.address||'', homeLat: a.lat||null, homeLng: a.lng||null,
+      homeMarker: null, distanceThreshold: null,
+      admitMonthly: a.monthlyCount||0, admitYTD: a.ytdCount||0,
+      polygon: null, path: null, facilityMarkers:[],
+    };
+    if(newNurse.homeLat && newNurse.homeLng)
+      newNurse.homeMarker = placeHomeMarker(newNurse.homeLat, newNurse.homeLng, newNurse);
+    if(a.marker) a.marker.setMap(null);
+    admitNurses.splice(admitNurses.findIndex(x=>x.id===id),1);
+    nurses.push(newNurse);
+    showToast(a.name+' moved to '+newType+' Case Manager','ok');
+  } else {
+    // Just changing admit/oncall type
+    const admitTypeMap={'ADMIT_FT':'FullTime','ADMIT_PRN':'PRN','ONCALL':'OnCall'};
+    a.admitType = admitTypeMap[newRole]||newRole;
+    if(a.marker){ a.marker.setMap(null); a.marker=null; }
+    if(a.lat&&a.lng) a.marker=placeStaffPin(a.lat,a.lng,a.name,'Admit',getAdmitColor(a.admitType));
+    showToast(a.name+' → '+(ADMIT_LABELS[a.admitType]||newRole),'ok');
+    applyViewVisibility();
+  }
+  renderTeamList(); save();
+}
+
+function updateNurseEmployment(id, status){
+  const n = nurses.find(x=>x.id===id); if(!n) return;
+  n.employmentStatus = status;
+  renderTeamList();
+  save();
+  const s = EMPLOYMENT_STATUS[status];
+  showToast(n.name+' → '+(s?s.icon+' '+s.label:status),'ok');
+}
+
+function updateAdmitEmployment(id, status){
+  const a = admitNurses.find(x=>x.id===id); if(!a) return;
+  a.employmentStatus = status;
+  renderTeamList();
+  save();
+  const s = EMPLOYMENT_STATUS[status];
+  showToast(a.name+' → '+(s?s.icon+' '+s.label:status),'ok');
+}
+
 function deleteNurse(id){
   if(!confirm('Delete this case manager?')) return;
   const idx=nurses.findIndex(n=>n.id===id); if(idx<0) return;
@@ -2543,8 +2684,9 @@ function saveAdmit(){
     const now=new Date();
     const obj={id:'a_'+Date.now(),name:pendingItem.name,
       admitType:pendingItem.admitType||'FullTime',
+      employmentStatus:'active',
       zoneKey:pendingItem.zoneKey,lat,lng,address:fmtAddr||addr,marker:null,
-      monthlyCount:0, ytdCount:0,
+      monthlyCount:0, ytdCount:0, evalCount:0,
       lastResetMonth: now.getMonth(), lastResetYear: now.getFullYear(),
     };
     if(lat&&lng)obj.marker=placeStaffPin(lat,lng,obj.name,'Admit');
@@ -2641,7 +2783,8 @@ function openAddPatient(){
     + masterFacilities.map(f=>`<option value="${f.id}">${f.name}</option>`).join('')
     + '<option value="__new__">+ Add new facility…</option>';
   // Primary nurse dropdown (unchanged)
-  const nursePool=currentView==='all'?nurses:nurses.filter(n=>n.zoneKey===currentView);
+  const nursePool=(currentView==='all'?nurses:nurses.filter(n=>n.zoneKey===currentView))
+    .filter(n=>!n.employmentStatus||n.employmentStatus==='active'||n.employmentStatus==='parttime'||n.employmentStatus==='prn');
   const nSel=document.getElementById('mPatientNurse');
   nSel.innerHTML='<option value="">— Unassigned —</option>'+nursePool.map(n=>`<option value="${n.id}|nurse">${n.name} (${n.nurseType||'RN'})</option>`).join('');
 
@@ -2650,11 +2793,12 @@ function openAddPatient(){
   const aSel=document.getElementById('mPatientAdmit');
   const zoneFilter = k => currentView==='all' || k===currentView;
 
-  const onCall   = admitNurses.filter(a=>a.admitType==='OnCall'   &&zoneFilter(a.zoneKey));
-  const ftAdmit  = admitNurses.filter(a=>a.admitType==='FullTime' &&zoneFilter(a.zoneKey));
-  const prnAdmit = admitNurses.filter(a=>a.admitType==='PRN'      &&zoneFilter(a.zoneKey));
-  const supStaff = staff.filter(s=>s.role==='Supervisor'          &&zoneFilter(s.zoneKey));
-  const caseNurses= nurses.filter(n=>zoneFilter(n.zoneKey));
+  const isActive = a => isActiveEmployee(a);
+  const onCall   = admitNurses.filter(a=>a.admitType==='OnCall'   &&zoneFilter(a.zoneKey)&&isActive(a));
+  const ftAdmit  = admitNurses.filter(a=>a.admitType==='FullTime' &&zoneFilter(a.zoneKey)&&isActive(a));
+  const prnAdmit = admitNurses.filter(a=>a.admitType==='PRN'      &&zoneFilter(a.zoneKey)&&isActive(a));
+  const supStaff = staff.filter(s=>s.role==='Supervisor'          &&zoneFilter(s.zoneKey)&&isActive(s));
+  const caseNurses= nurses.filter(n=>zoneFilter(n.zoneKey)&&isActive(n));
 
   let opts='<option value="">— None —</option>';
   if(onCall.length)    opts+='<optgroup label="🌙 On-Call">'+onCall.map(a=>`<option value="${a.id}|admit">🌙 ${a.name}</option>`).join('')+'</optgroup>';
@@ -2926,10 +3070,11 @@ function renderTeamList(){
       const now=new Date();
       const monthName=now.toLocaleString('default',{month:'short'});
       return `<div class="card">
-        <div class="card-top">
+        <div class="card-top" style="${m.employmentStatus==='inactive'?'opacity:0.5':''}">
           <div class="card-dot" style="background:#0f1117;border:2px solid ${color}"></div>
           <div class="card-name">${m.name}</div>
           <span style="font-size:9px;background:${color};color:#fff;border-radius:4px;padding:2px 6px;font-weight:700;flex-shrink:0">${typeLabel}</span>
+          ${m.employmentStatus==='inactive'?'<span style="font-size:9px;color:var(--muted);font-style:italic">🌿 Alumni</span>':''}
         </div>
         <div style="font-size:10px;color:${OFFICE_ZONES[m.zoneKey]?.color||'var(--muted)'};margin-top:2px">${OFFICE_ZONES[m.zoneKey]?.label||m.zoneKey}</div>
         <div style="display:flex;gap:6px;margin-top:6px">
@@ -2951,7 +3096,29 @@ function renderTeamList(){
             +(evalCt?'<div style="flex:1;background:rgba(167,139,250,.08);border:1px solid rgba(167,139,250,.2);border-radius:7px;padding:4px 8px;text-align:center"><div style="font-family:DM Mono,monospace;font-size:13px;font-weight:600;color:#a78bfa">'+evalCt+'</div><div style="font-size:9px;color:var(--muted)">Evals</div></div>':'')
             +'</div>';
         })()}
-        <div class="card-actions" style="margin-top:6px"><button class="icon-btn del" onclick="deleteAdmit('${m.id}')">✕ Remove</button></div>
+        <div style="display:flex;gap:5px;margin-top:6px;align-items:center">
+          <select onchange="changeAdmitRole('${m.id}',this.value)"
+            style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:10px;padding:3px 5px;outline:none;cursor:pointer"
+            title="Role">
+            <optgroup label="Admit / On-Call">
+              <option value="ADMIT_FT" ${(!m.admitType||m.admitType==='FullTime'||m.admitType==='ADMIT_FT')?'selected':''}>Admit RN (FT)</option>
+              <option value="ADMIT_PRN" ${(m.admitType==='PRN'||m.admitType==='ADMIT_PRN')?'selected':''}>Admit RN (PRN)</option>
+              <option value="ONCALL" ${(m.admitType==='OnCall'||m.admitType==='ONCALL')?'selected':''}>🌙 On-Call RN</option>
+            </optgroup>
+            <optgroup label="Move to Case Manager...">
+              <option value="__cm_rn__">→ Case Manager (RN)</option>
+              <option value="__cm_lpn__">→ Case Manager (LPN)</option>
+              <option value="__cm_sup__">→ ⭐ Supervisor</option>
+              <option value="__cm_dir__">→ 👑 Director</option>
+            </optgroup>
+          </select>
+          <select onchange="updateAdmitEmployment('${m.id}',this.value)"
+            style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:${!m.employmentStatus||m.employmentStatus==='active'?'var(--text)':'var(--muted)'};font-size:10px;padding:3px 5px;outline:none;cursor:pointer"
+            title="Status">
+            ${Object.entries(EMPLOYMENT_STATUS).map(([k,v])=>`<option value="${k}" ${(m.employmentStatus||'active')===k?'selected':''}>${v.icon} ${v.label}</option>`).join('')}
+          </select>
+          <button class="icon-btn del" onclick="deleteAdmit('${m.id}')" style="padding:3px 6px;font-size:11px">✕</button>
+        </div>
       </div>`;
     } else {
       // Nurse card
@@ -2959,7 +3126,7 @@ function renderTeamList(){
       const allAreas=[...(m.counties||[]).map(c=>c+' Co.'), ...(m.cities||[]), ...(m.facilities||[]).map(f=>'🏥 '+f.name)];
       const hasTerr=(m.path&&m.path.length>2)||(m.counties&&m.counties.length>0)||(m.cities&&m.cities.length>0);
       return `<div class="card clickable ${selectedNurseId===m.id?'selected':''}" onclick="selectNurse('${m.id}')">
-        <div class="card-top">
+        <div class="card-top" style="${m.employmentStatus==='inactive'||m.employmentStatus==='loa'?'opacity:0.5':''}">
           <div class="card-dot" style="background:${m.color||'#9B89C4'}"></div>
           <div class="card-name">${m.name}</div>
           ${m.nurseType==='Supervisor'?'<span style="font-size:9px;background:#5C3D8F;color:#fff;border-radius:4px;padding:2px 5px;font-weight:700;flex-shrink:0">⭐ SUP</span>':m.nurseType==='Director'?'<span style="font-size:9px;background:#3B2060;color:#fff;border-radius:4px;padding:2px 5px;font-weight:700;flex-shrink:0">👑 DIR</span>':m.nurseType==='PRN'?'<span style="font-size:9px;background:#7B6BA8;color:#fff;border-radius:4px;padding:2px 5px;font-weight:700;flex-shrink:0">PRN</span>':m.nurseType==='LPN'?'<span style="font-size:9px;background:#B8A0C8;color:#fff;border-radius:4px;padding:2px 5px;font-weight:700;flex-shrink:0">LPN</span>':''}
@@ -2969,9 +3136,32 @@ function renderTeamList(){
         ${(m.admitMonthly||m.admitYTD)?'<div style="font-size:10px;color:#60a5fa;margin-top:2px">📋 '+(m.admitMonthly||0)+' this month | '+(m.admitYTD||0)+' YTD</div>':''}
         <div style="font-size:10px;color:${OFFICE_ZONES[m.zoneKey]?.color||'var(--muted)'};margin-top:2px">${OFFICE_ZONES[m.zoneKey]?.label||m.zoneKey}</div>
         ${allAreas.length?'<div class="tag-pills">'+allAreas.slice(0,5).map(a=>'<span class="tpill">'+a+'</span>').join('')+(allAreas.length>5?'<span class="tpill">+'+(allAreas.length-5)+' more</span>':'')+'</div>':''}
+        <div style="display:flex;gap:4px;margin-top:5px;align-items:center">
+          <select onchange="changeNurseRole('${m.id}',this.value);event.stopPropagation()"
+            onclick="event.stopPropagation()"
+            style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:10px;padding:3px 5px;outline:none;cursor:pointer"
+            title="Role">
+            <optgroup label="Case Manager">
+              <option value="CM_RN" ${(!m.nurseType||m.nurseType==='RN'||m.nurseType==='CM_RN')?'selected':''}>Case Manager (RN)</option>
+              <option value="CM_LPN" ${(m.nurseType==='LPN'||m.nurseType==='CM_LPN')?'selected':''}>Case Manager (LPN)</option>
+              <option value="CM_SUP" ${(m.nurseType==='Supervisor'||m.nurseType==='CM_SUP')?'selected':''}>⭐ Supervisor</option>
+              <option value="CM_DIR" ${(m.nurseType==='Director'||m.nurseType==='CM_DIR')?'selected':''}>👑 Director</option>
+            </optgroup>
+            <optgroup label="Move to...">
+              <option value="ADMIT_FT">→ Admit RN (FT)</option>
+              <option value="ADMIT_PRN">→ Admit RN (PRN)</option>
+              <option value="ONCALL">→ 🌙 On-Call RN</option>
+            </optgroup>
+          </select>
+          <select onchange="updateNurseEmployment('${m.id}',this.value);event.stopPropagation()"
+            onclick="event.stopPropagation()"
+            style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:${!m.employmentStatus||m.employmentStatus==='active'?'var(--text)':'var(--muted)'};font-size:10px;padding:3px 5px;outline:none;cursor:pointer"
+            title="Status">
+            ${Object.entries(EMPLOYMENT_STATUS).map(([k,v])=>`<option value="${k}" ${(m.employmentStatus||'active')===k?'selected':''}>${v.icon} ${v.label}</option>`).join('')}
+          </select>
+        </div>
         <div class="card-actions">
-          <button class="icon-btn" onclick="event.stopPropagation();openNurseTerrModal('${m.id}')">${hasTerr?'✎ Edit Territory':'📍 Set Territory'}</button>
-          <button class="icon-btn" onclick="event.stopPropagation();selectedNurseId='${m.id}';toggleDraw()" style="font-size:10px">✏️ Draw</button>
+          <button class="icon-btn" onclick="event.stopPropagation();openNurseTerrModal('${m.id}')">${hasTerr?'✎ Edit':'📍 Set Territory'}</button>
           <button class="icon-btn del" onclick="event.stopPropagation();deleteNurse('${m.id}')">✕</button>
         </div>
       </div>`;
